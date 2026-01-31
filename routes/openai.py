@@ -137,6 +137,7 @@ async def chat_completions(request: Request):
                     def process_data():
                         nonlocal has_content
                         ptype = "text"
+                        response_started = False  # 追踪是否已开始正式回复
                         logger.info(f"[sse_stream] 开始处理数据流, session_id={session_id}")
                         try:
                             for raw_line in deepseek_resp.iter_lines():
@@ -170,17 +171,43 @@ async def chat_completions(request: Request):
                                             result_queue.put(None)
                                             return
                                         
-                                        # logger.debug(f"[sse_stream] 收到 chunk: {chunk}")
+                                        # logger.info(f"[sse_stream] RAW 原始chunk: {data_str[:300]}")
                                         
                                         if "v" in chunk:
                                             v_value = chunk["v"]
                                             content = ""
-                                            if "p" in chunk and chunk.get("p") == "response/search_status":
+                                            chunk_path = chunk.get("p", "")
+                                            
+                                            if chunk_path == "response/search_status":
                                                 continue
-                                            if "p" in chunk and chunk.get("p") == "response/thinking_content":
+                                            
+                                            # 检测是否开始正式回复
+                                            # 只有当 fragments 包含 RESPONSE 类型时才认为开始正式回复
+                                            if "response/fragments" in chunk_path and isinstance(v_value, list):
+                                                for frag in v_value:
+                                                    if isinstance(frag, dict) and frag.get("type", "").upper() == "RESPONSE":
+                                                        response_started = True
+                                                        break
+                                            
+                                            # 确定当前类型
+                                            if chunk_path == "response/thinking_content":
                                                 ptype = "thinking"
-                                            elif "p" in chunk and chunk.get("p") == "response/content":
+                                            elif chunk_path == "response/content":
                                                 ptype = "text"
+                                                response_started = True  # 有 response/content 也意味着开始正式回复
+                                            elif "response/fragments" in chunk_path:
+                                                # fragments 的类型由内层 type 决定，默认用之前的 ptype
+                                                pass
+                                            elif not chunk_path:
+                                                # 没有 p 字段的内容：
+                                                # - reasoner 模式下，未开始正式回复前是 thinking
+                                                # - 开始正式回复后是 text
+                                                if thinking_enabled and not response_started:
+                                                    ptype = "thinking"
+                                                else:
+                                                    ptype = "text"
+                                            
+                                            # logger.info(f"[sse_stream] ptype={ptype}, response_started={response_started}, chunk_path='{chunk_path}', v_type={type(v_value).__name__}, v={str(v_value)[:50]}")
                                             if isinstance(v_value, str):
                                                 # 检查是否是 FINISHED 状态
                                                 if v_value == "FINISHED":
@@ -224,13 +251,23 @@ async def chat_completions(request: Request):
                                                             if item_v and item_v != "FINISHED":
                                                                 extracted.append((item_v, content_type))
                                                         elif isinstance(item_v, list):
-                                                            # 内层可能是 [{"content": "text", ...}] 格式
+                                                            # 内层可能是 [{"content": "text", "type": "THINK/RESPONSE", ...}] 格式
                                                             for inner in item_v:
                                                                 if isinstance(inner, dict):
-                                                                    # 直接提取 content 字段
+                                                                    # 检查内层的 type 字段
+                                                                    inner_type = inner.get("type", "").upper()
+                                                                    # logger.info(f"[sse_stream] 内层 type={inner_type}, content={str(inner.get('content', ''))[:50]}")
+                                                                    # DeepSeek 使用 THINK 而不是 THINKING
+                                                                    if inner_type == "THINK" or inner_type == "THINKING":
+                                                                        final_type = "thinking"
+                                                                    elif inner_type == "RESPONSE":
+                                                                        final_type = "text"
+                                                                    else:
+                                                                        final_type = content_type  # 继承外层类型
+                                                                    
                                                                     content = inner.get("content", "")
                                                                     if content:
-                                                                        extracted.append((content, content_type))
+                                                                        extracted.append((content, final_type))
                                                                 elif isinstance(inner, str) and inner:
                                                                     extracted.append((inner, content_type))
                                                     return extracted
