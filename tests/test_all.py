@@ -559,6 +559,80 @@ class TestRunner:
         }
 
     # =====================================================================
+    # 管理 API 测试
+    # =====================================================================
+
+    def test_admin_config(self) -> dict:
+        """测试管理配置 API"""
+        resp = requests.get(
+            f"{self.endpoint}/admin/config",
+            timeout=10
+        )
+        
+        if resp.status_code != 200:
+            return {"success": False, "message": f"状态码: {resp.status_code}"}
+        
+        data = resp.json()
+        
+        # 验证返回结构
+        if "accounts" not in data:
+            return {"success": False, "message": "响应缺少 accounts 字段"}
+        
+        # 验证 token_preview 字段存在
+        accounts = data.get("accounts", [])
+        if accounts:
+            first_acc = accounts[0]
+            if "token_preview" not in first_acc:
+                return {"success": False, "message": "响应缺少 token_preview 字段"}
+        
+        return {
+            "success": True,
+            "message": f"获取配置成功，{len(accounts)} 个账号",
+            "details": {"account_count": len(accounts)}
+        }
+
+    def test_admin_account_test(self) -> dict:
+        """测试单账号 API 测试端点"""
+        # 先获取配置以获取账号
+        config_resp = requests.get(f"{self.endpoint}/admin/config", timeout=10)
+        if config_resp.status_code != 200:
+            return {"success": False, "message": "获取配置失败"}
+        
+        accounts = config_resp.json().get("accounts", [])
+        if not accounts:
+            return {"success": False, "message": "没有可测试的账号"}
+        
+        # 测试第一个账号
+        first_acc = accounts[0]
+        identifier = first_acc.get("email") or first_acc.get("mobile")
+        
+        resp = requests.post(
+            f"{self.endpoint}/admin/accounts/test",
+            json={"identifier": identifier},
+            timeout=30
+        )
+        
+        if resp.status_code != 200:
+            return {"success": False, "message": f"状态码: {resp.status_code}"}
+        
+        data = resp.json()
+        
+        # 验证返回结构
+        required_fields = ["account", "success", "response_time", "message"]
+        for field in required_fields:
+            if field not in data:
+                return {"success": False, "message": f"响应缺少 {field} 字段"}
+        
+        if not data["success"]:
+            return {"success": False, "message": f"账号测试失败: {data['message']}"}
+        
+        return {
+            "success": True,
+            "message": f"账号 {identifier} 测试成功 ({data['response_time']}ms)",
+            "details": {"response_time": data["response_time"]}
+        }
+
+    # =====================================================================
     # 运行测试
     # =====================================================================
 
@@ -598,6 +672,10 @@ class TestRunner:
         if not quick:
             self.run_test("多轮对话", self.test_multi_turn_conversation)
             self.run_test("长输入处理", self.test_long_input)
+        
+        # 管理 API 测试
+        self.run_test("管理配置 API", self.test_admin_config)
+        self.run_test("账号测试 API", self.test_admin_account_test)
         
         # 输出测试报告
         self.print_report()

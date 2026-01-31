@@ -62,11 +62,13 @@ async def get_config(_: bool = Depends(verify_admin)):
         "claude_model_mapping": CONFIG.get("claude_model_mapping", {}),
     }
     for acc in CONFIG.get("accounts", []):
+        token = acc.get("token", "")
         safe_acc = {
             "email": acc.get("email", ""),
             "mobile": acc.get("mobile", ""),
             "has_password": bool(acc.get("password")),
-            "has_token": bool(acc.get("token")),
+            "has_token": bool(token),
+            "token_preview": token[:12] + "..." if len(token) > 12 else "" if token else "",
         }
         safe_config["accounts"].append(safe_acc)
     return JSONResponse(content=safe_config)
@@ -288,14 +290,9 @@ async def validate_all_accounts(_: bool = Depends(verify_admin)):
 # 账号 API 测试（实际发送请求）
 # ----------------------------------------------------------------------
 async def test_account_api(account: dict, model: str = "deepseek-chat", message: str = "") -> dict:
-    """测试单个账号的 API 调用能力
-    
-    如果提供了 message，会发送实际请求并返回 AI 回复；
-    否则只测试创建会话（快速测试）。
-    """
+    """测试单个账号的 API 调用能力（通过创建会话验证）"""
     from curl_cffi import requests as cffi_requests
-    from core.deepseek import DEEPSEEK_CREATE_SESSION_URL, DEEPSEEK_CHAT_COMPLETION_URL, BASE_HEADERS
-    from core.pow import get_pow_response_direct
+    from core.deepseek import DEEPSEEK_CREATE_SESSION_URL, BASE_HEADERS
     
     acc_id = get_account_identifier(account)
     result = {
@@ -304,7 +301,6 @@ async def test_account_api(account: dict, model: str = "deepseek-chat", message:
         "response_time": 0,
         "message": "",
         "model": model,
-        "reply": "",  # AI 回复内容
     }
     
     import time
@@ -323,7 +319,7 @@ async def test_account_api(account: dict, model: str = "deepseek-chat", message:
         
         headers = {**BASE_HEADERS, "authorization": f"Bearer {token}"}
         
-        # 1. 创建会话
+        # 创建会话来测试 API 可用性
         session_resp = cffi_requests.post(
             DEEPSEEK_CREATE_SESSION_URL,
             headers=headers,
@@ -343,70 +339,8 @@ async def test_account_api(account: dict, model: str = "deepseek-chat", message:
             account["token"] = ""
             return result
         
-        session_id = session_data["data"]["biz_data"]["id"]
-        
-        # 如果没有消息，只测试会话创建
-        if not message:
-            result["success"] = True
-            result["message"] = "API 测试成功"
-            result["response_time"] = round((time.time() - start_time) * 1000)
-            return result
-        
-        # 2. 发送实际请求
-        from core.pow import get_pow_response_direct
-        pow_resp = get_pow_response_direct(headers)
-        if not pow_resp:
-            result["message"] = "获取 PoW 失败"
-            return result
-        
-        chat_headers = {**headers, "x-ds-pow-response": pow_resp}
-        thinking_enabled = "reasoner" in model.lower()
-        search_enabled = "search" in model.lower()
-        
-        payload = {
-            "chat_session_id": session_id,
-            "parent_message_id": None,
-            "prompt": message,
-            "ref_file_ids": [],
-            "thinking_enabled": thinking_enabled,
-            "search_enabled": search_enabled,
-        }
-        
-        chat_resp = cffi_requests.post(
-            DEEPSEEK_CHAT_COMPLETION_URL,
-            headers=chat_headers,
-            json=payload,
-            impersonate="safari15_3",
-            timeout=60,
-            stream=True,
-        )
-        
-        if chat_resp.status_code != 200:
-            result["message"] = f"对话请求失败: HTTP {chat_resp.status_code}"
-            return result
-        
-        # 解析流式响应获取回复
-        reply_text = ""
-        for line in chat_resp.iter_lines():
-            try:
-                line_str = line.decode("utf-8")
-                if line_str.startswith("data:"):
-                    data_str = line_str[5:].strip()
-                    if data_str == "[DONE]":
-                        break
-                    import json
-                    chunk = json.loads(data_str)
-                    choices = chunk.get("choices", [])
-                    if choices:
-                        delta = choices[0].get("delta", {})
-                        if delta.get("type") == "text":
-                            reply_text += delta.get("content", "")
-            except:
-                pass
-        
         result["success"] = True
         result["message"] = "API 测试成功"
-        result["reply"] = reply_text[:500]  # 限制长度
         result["response_time"] = round((time.time() - start_time) * 1000)
         
     except Exception as e:

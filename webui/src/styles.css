@@ -446,6 +446,65 @@ textarea.form-input {
   font-size: 0.8rem;
 }
 
+/* Token Preview */
+.token-preview {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-family: 'Monaco', 'Menlo', monospace;
+  background: var(--bg-tertiary);
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius);
+  margin-left: 0.5rem;
+}
+
+/* Batch Progress */
+.batch-progress {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius);
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.progress-bar {
+  height: 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--primary-hover));
+  transition: width 0.3s ease;
+}
+
+.progress-results {
+  margin-top: 0.75rem;
+  max-height: 150px;
+  overflow-y: auto;
+  font-size: 0.85rem;
+}
+
+.progress-result {
+  padding: 0.25rem 0;
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.progress-result.success {
+  color: var(--success);
+}
+
+.progress-result.failed {
+  color: var(--error);
+}
+
 @media (max-width: 640px) {
   .app {
     padding: 1rem;

@@ -10,6 +10,7 @@ export default function AccountManager({ config, onRefresh, onMessage }) {
     const [validatingAll, setValidatingAll] = useState(false)
     const [testing, setTesting] = useState({})  // 单个账号测试状态
     const [testingAll, setTestingAll] = useState(false)
+    const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, results: [] })
     const [queueStatus, setQueueStatus] = useState(null)
 
     // 获取队列状态
@@ -137,20 +138,41 @@ export default function AccountManager({ config, onRefresh, onMessage }) {
         }
     }
 
-    // 批量验证所有账号
+    // 批量验证所有账号（带进度）
     const validateAllAccounts = async () => {
-        if (!confirm('确定要验证所有账号？这可能需要一些时间。')) return
+        if (!confirm('确定要验证所有账号？')) return
+        const accounts = config.accounts || []
+        if (accounts.length === 0) return
+
         setValidatingAll(true)
-        try {
-            const res = await fetch('/admin/accounts/validate-all', { method: 'POST' })
-            const data = await res.json()
-            onMessage('success', `验证完成: ${data.valid}/${data.total} 个账号有效`)
-            onRefresh()
-        } catch (e) {
-            onMessage('error', '批量验证失败: ' + e.message)
-        } finally {
-            setValidatingAll(false)
+        setBatchProgress({ current: 0, total: accounts.length, results: [] })
+
+        let validCount = 0
+        const results = []
+
+        for (let i = 0; i < accounts.length; i++) {
+            const acc = accounts[i]
+            const id = acc.email || acc.mobile
+
+            try {
+                const res = await fetch('/admin/accounts/validate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ identifier: id }),
+                })
+                const data = await res.json()
+                results.push({ id, success: data.valid, message: data.message })
+                if (data.valid) validCount++
+            } catch (e) {
+                results.push({ id, success: false, message: e.message })
+            }
+
+            setBatchProgress({ current: i + 1, total: accounts.length, results: [...results] })
         }
+
+        onMessage('success', `验证完成: ${validCount}/${accounts.length} 个账号有效`)
+        onRefresh()
+        setValidatingAll(false)
     }
 
     // 测试单个账号 API
@@ -176,24 +198,41 @@ export default function AccountManager({ config, onRefresh, onMessage }) {
         }
     }
 
-    // 批量测试所有账号 API
+    // 批量测试所有账号 API（带进度）
     const testAllAccounts = async () => {
-        if (!confirm('确定要测试所有账号的 API？这可能需要较长时间。')) return
+        if (!confirm('确定要测试所有账号的 API？')) return
+        const accounts = config.accounts || []
+        if (accounts.length === 0) return
+
         setTestingAll(true)
-        try {
-            const res = await fetch('/admin/accounts/test-all', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({}),
-            })
-            const data = await res.json()
-            onMessage('success', `API 测试完成: ${data.success}/${data.total} 个账号可用`)
-            onRefresh()
-        } catch (e) {
-            onMessage('error', '批量 API 测试失败: ' + e.message)
-        } finally {
-            setTestingAll(false)
+        setBatchProgress({ current: 0, total: accounts.length, results: [] })
+
+        let successCount = 0
+        const results = []
+
+        for (let i = 0; i < accounts.length; i++) {
+            const acc = accounts[i]
+            const id = acc.email || acc.mobile
+
+            try {
+                const res = await fetch('/admin/accounts/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ identifier: id }),
+                })
+                const data = await res.json()
+                results.push({ id, success: data.success, message: data.message, time: data.response_time })
+                if (data.success) successCount++
+            } catch (e) {
+                results.push({ id, success: false, message: e.message })
+            }
+
+            setBatchProgress({ current: i + 1, total: accounts.length, results: [...results] })
         }
+
+        onMessage('success', `API 测试完成: ${successCount}/${accounts.length} 个账号可用`)
+        onRefresh()
+        setTestingAll(false)
     }
 
     return (
@@ -267,6 +306,31 @@ export default function AccountManager({ config, onRefresh, onMessage }) {
                     </div>
                 </div>
 
+                {/* 批量操作进度条 */}
+                {(testingAll || validatingAll) && batchProgress.total > 0 && (
+                    <div className="batch-progress">
+                        <div className="progress-header">
+                            <span>{testingAll ? '🧪 批量测试中...' : '✅ 批量验证中...'}</span>
+                            <span>{batchProgress.current}/{batchProgress.total}</span>
+                        </div>
+                        <div className="progress-bar">
+                            <div
+                                className="progress-fill"
+                                style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+                            />
+                        </div>
+                        {batchProgress.results.length > 0 && (
+                            <div className="progress-results">
+                                {batchProgress.results.map((r, i) => (
+                                    <div key={i} className={`progress-result ${r.success ? 'success' : 'failed'}`}>
+                                        {r.success ? '✓' : '✗'} {r.id} {r.time ? `(${r.time}ms)` : ''}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {config.accounts?.length > 0 ? (
                     <div className="list">
                         {config.accounts.map((acc, i) => {
@@ -278,6 +342,11 @@ export default function AccountManager({ config, onRefresh, onMessage }) {
                                         <span className={`badge ${acc.has_token ? 'badge-success' : 'badge-warning'}`}>
                                             {acc.has_token ? '已登录' : '未登录'}
                                         </span>
+                                        {acc.token_preview && (
+                                            <span className="token-preview" title="Token 预览">
+                                                🔑 {acc.token_preview}
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="btn-group-inline">
                                         <button
