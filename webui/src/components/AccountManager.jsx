@@ -240,44 +240,43 @@ export default function AccountManager({ config, onRefresh, onMessage, authFetch
 
     return (
         <div className="space-y-6">
-            {/* Queue Status */}
-            {queueStatus && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-card border border-border rounded-xl p-3 lg:p-4 flex items-center justify-between shadow-sm">
-                        <div className="flex items-center gap-2 lg:gap-3">
-                            <div className="p-1.5 lg:p-2 bg-emerald-500/10 text-emerald-500 rounded-lg">
-                                <CheckCircle2 className="w-4 h-4 lg:w-5 h-5" />
+            {/* Queue Status - Flat & Clean */}
+            {
+                queueStatus && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-card border border-border rounded-xl p-4 flex flex-col justify-between shadow-sm relative overflow-hidden group">
+                            <div className="absolute right-0 top-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                                <CheckCircle2 className="w-16 h-16" />
                             </div>
-                            <div>
-                                <p className="text-[10px] lg:text-sm font-medium text-muted-foreground uppercase tracking-wider lg:capitalize lg:tracking-normal">可用账号</p>
-                                <p className="text-xl lg:text-2xl font-bold">{queueStatus.available}</p>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Available</p>
+                            <div className="mt-2 flex items-baseline gap-2">
+                                <span className="text-3xl font-bold text-foreground">{queueStatus.available}</span>
+                                <span className="text-xs text-muted-foreground">accounts</span>
+                            </div>
+                        </div>
+                        <div className="bg-card border border-border rounded-xl p-4 flex flex-col justify-between shadow-sm relative overflow-hidden group">
+                            <div className="absolute right-0 top-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                                <Server className="w-16 h-16" />
+                            </div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">In Use</p>
+                            <div className="mt-2 flex items-baseline gap-2">
+                                <span className="text-3xl font-bold text-foreground">{queueStatus.in_use}</span>
+                                <span className="text-xs text-muted-foreground">threads</span>
+                            </div>
+                        </div>
+                        <div className="bg-card border border-border rounded-xl p-4 flex flex-col justify-between shadow-sm relative overflow-hidden group">
+                            <div className="absolute right-0 top-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                                <ShieldCheck className="w-16 h-16" />
+                            </div>
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Total Pool</p>
+                            <div className="mt-2 flex items-baseline gap-2">
+                                <span className="text-3xl font-bold text-foreground">{queueStatus.total}</span>
+                                <span className="text-xs text-muted-foreground">accounts</span>
                             </div>
                         </div>
                     </div>
-                    <div className="bg-card border border-border rounded-xl p-3 lg:p-4 flex items-center justify-between shadow-sm">
-                        <div className="flex items-center gap-2 lg:gap-3">
-                            <div className="p-1.5 lg:p-2 bg-amber-500/10 text-amber-500 rounded-lg">
-                                <Server className="w-4 h-4 lg:w-5 h-5" />
-                            </div>
-                            <div>
-                                <p className="text-[10px] lg:text-sm font-medium text-muted-foreground uppercase tracking-wider lg:capitalize lg:tracking-normal">使用中</p>
-                                <p className="text-xl lg:text-2xl font-bold">{queueStatus.in_use}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="bg-card border border-border rounded-xl p-3 lg:p-4 flex items-center justify-between shadow-sm">
-                        <div className="flex items-center gap-2 lg:gap-3">
-                            <div className="p-1.5 lg:p-2 bg-primary/10 text-primary rounded-lg">
-                                <ShieldCheck className="w-4 h-4 lg:w-5 h-5" />
-                            </div>
-                            <div>
-                                <p className="text-[10px] lg:text-sm font-medium text-muted-foreground uppercase tracking-wider lg:capitalize lg:tracking-normal">账号总数</p>
-                                <p className="text-xl lg:text-2xl font-bold">{queueStatus.total}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+                )
+            }
 
             {/* API Keys Section */}
             <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
@@ -288,10 +287,10 @@ export default function AccountManager({ config, onRefresh, onMessage, authFetch
                     </div>
                     <button
                         onClick={() => setShowAddKey(true)}
-                        className="btn btn-primary flex items-center gap-2"
+                        className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium text-sm shadow-sm"
                     >
                         <Plus className="w-4 h-4" />
-                        新增密钥
+                        Add Key
                     </button>
                 </div>
 
@@ -327,25 +326,25 @@ export default function AccountManager({ config, onRefresh, onMessage, authFetch
                         <button
                             onClick={testAllAccounts}
                             disabled={testingAll || validatingAll || !config.accounts?.length}
-                            className="btn btn-secondary text-xs"
+                            className="flex items-center px-3 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors text-xs font-medium border border-border disabled:opacity-50"
                         >
                             {testingAll ? <span className="animate-spin mr-2">⟳</span> : <Play className="w-3 h-3 mr-2" />}
-                            测试全部
+                            Test All
                         </button>
                         <button
                             onClick={validateAllAccounts}
                             disabled={validatingAll || testingAll || !config.accounts?.length}
-                            className="btn btn-secondary text-xs"
+                            className="flex items-center px-3 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors text-xs font-medium border border-border disabled:opacity-50"
                         >
                             {validatingAll ? <span className="animate-spin mr-2">⟳</span> : <CheckCircle2 className="w-3 h-3 mr-2" />}
-                            校验全部
+                            Validate All
                         </button>
                         <button
                             onClick={() => setShowAddAccount(true)}
-                            className="btn btn-primary flex items-center gap-2"
+                            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium text-sm shadow-sm"
                         >
                             <Plus className="w-4 h-4" />
-                            添加账号
+                            Add Account
                         </button>
                     </div>
                 </div>
@@ -433,88 +432,92 @@ export default function AccountManager({ config, onRefresh, onMessage, authFetch
             </div>
 
             {/* Modals */}
-            {showAddKey && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-                    <div className="bg-card w-full max-w-md rounded-xl border border-border shadow-2xl overflow-hidden animate-in zoom-in-95">
-                        <div className="p-4 border-b border-border flex justify-between items-center">
-                            <h3 className="font-semibold">添加 API 密钥</h3>
-                            <button onClick={() => setShowAddKey(false)} className="text-muted-foreground hover:text-foreground">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium mb-1.5">新密钥值</label>
-                                <input
-                                    type="text"
-                                    className="input-field"
-                                    placeholder="输入自定义 API 密钥"
-                                    value={newKey}
-                                    onChange={e => setNewKey(e.target.value)}
-                                    autoFocus
-                                />
-                            </div>
-                            <div className="flex justify-end gap-2 pt-2">
-                                <button onClick={() => setShowAddKey(false)} className="btn btn-secondary">取消</button>
-                                <button onClick={addKey} disabled={loading} className="btn btn-primary">
-                                    {loading ? '添加中...' : '添加'}
+            {
+                showAddKey && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
+                        <div className="bg-card w-full max-w-md rounded-xl border border-border shadow-2xl overflow-hidden animate-in zoom-in-95">
+                            <div className="p-4 border-b border-border flex justify-between items-center">
+                                <h3 className="font-semibold">添加 API 密钥</h3>
+                                <button onClick={() => setShowAddKey(false)} className="text-muted-foreground hover:text-foreground">
+                                    <X className="w-5 h-5" />
                                 </button>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1.5">新密钥值</label>
+                                    <input
+                                        type="text"
+                                        className="input-field bg-[#09090b]"
+                                        placeholder="输入自定义 API 密钥"
+                                        value={newKey}
+                                        onChange={e => setNewKey(e.target.value)}
+                                        autoFocus
+                                    />
+                                </div>
+                                <div className="flex justify-end gap-2 pt-2">
+                                    <button onClick={() => setShowAddKey(false)} className="px-4 py-2 rounded-lg border border-border hover:bg-secondary transition-colors text-sm font-medium">Cancel</button>
+                                    <button onClick={addKey} disabled={loading} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium disabled:opacity-50">
+                                        {loading ? 'Adding...' : 'Add Key'}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
-            {showAddAccount && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-                    <div className="bg-card w-full max-w-md rounded-xl border border-border shadow-2xl overflow-hidden animate-in zoom-in-95">
-                        <div className="p-4 border-b border-border flex justify-between items-center">
-                            <h3 className="font-semibold">添加 DeepSeek 账号</h3>
-                            <button onClick={() => setShowAddAccount(false)} className="text-muted-foreground hover:text-foreground">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium mb-1.5">邮箱 (可选)</label>
-                                <input
-                                    type="email"
-                                    className="input-field"
-                                    placeholder="user@example.com"
-                                    value={newAccount.email}
-                                    onChange={e => setNewAccount({ ...newAccount, email: e.target.value })}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1.5">手机号 (可选)</label>
-                                <input
-                                    type="text"
-                                    className="input-field"
-                                    placeholder="+86..."
-                                    value={newAccount.mobile}
-                                    onChange={e => setNewAccount({ ...newAccount, mobile: e.target.value })}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1.5">密码 <span className="text-destructive">*</span></label>
-                                <input
-                                    type="password"
-                                    className="input-field"
-                                    placeholder="账号密码"
-                                    value={newAccount.password}
-                                    onChange={e => setNewAccount({ ...newAccount, password: e.target.value })}
-                                />
-                            </div>
-                            <div className="flex justify-end gap-2 pt-2">
-                                <button onClick={() => setShowAddAccount(false)} className="btn btn-secondary">取消</button>
-                                <button onClick={addAccount} disabled={loading} className="btn btn-primary">
-                                    {loading ? '添加中...' : '添加账号'}
+            {
+                showAddAccount && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
+                        <div className="bg-card w-full max-w-md rounded-xl border border-border shadow-2xl overflow-hidden animate-in zoom-in-95">
+                            <div className="p-4 border-b border-border flex justify-between items-center">
+                                <h3 className="font-semibold">添加 DeepSeek 账号</h3>
+                                <button onClick={() => setShowAddAccount(false)} className="text-muted-foreground hover:text-foreground">
+                                    <X className="w-5 h-5" />
                                 </button>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1.5">邮箱 (可选)</label>
+                                    <input
+                                        type="email"
+                                        className="input-field"
+                                        placeholder="user@example.com"
+                                        value={newAccount.email}
+                                        onChange={e => setNewAccount({ ...newAccount, email: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1.5">手机号 (可选)</label>
+                                    <input
+                                        type="text"
+                                        className="input-field"
+                                        placeholder="+86..."
+                                        value={newAccount.mobile}
+                                        onChange={e => setNewAccount({ ...newAccount, mobile: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1.5">密码 <span className="text-destructive">*</span></label>
+                                    <input
+                                        type="password"
+                                        className="input-field bg-[#09090b]"
+                                        placeholder="账号密码"
+                                        value={newAccount.password}
+                                        onChange={e => setNewAccount({ ...newAccount, password: e.target.value })}
+                                    />
+                                </div>
+                                <div className="flex justify-end gap-2 pt-2">
+                                    <button onClick={() => setShowAddAccount(false)} className="px-4 py-2 rounded-lg border border-border hover:bg-secondary transition-colors text-sm font-medium">Cancel</button>
+                                    <button onClick={addAccount} disabled={loading} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium disabled:opacity-50">
+                                        {loading ? 'Adding...' : 'Add Account'}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     )
 }

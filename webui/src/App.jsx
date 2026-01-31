@@ -174,18 +174,20 @@ export default function App() {
 
             {/* Sidebar */}
             <aside className={clsx(
-                "fixed lg:static inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transition-transform duration-200 ease-in-out lg:transform-none flex flex-col",
+                "fixed lg:static inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transition-transform duration-300 ease-in-out lg:transform-none flex flex-col shadow-2xl lg:shadow-none",
                 sidebarOpen ? "translate-x-0" : "-translate-x-full"
             )}>
-                <div className="p-6 border-b border-border">
-                    <div className="flex items-center gap-2 font-bold text-xl text-primary">
-                        <LayoutDashboard className="w-6 h-6" />
-                        <span>DS2API 管理面板</span>
+                <div className="p-6">
+                    <div className="flex items-center gap-2.5 font-bold text-xl text-foreground tracking-tight">
+                        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20">
+                            <LayoutDashboard className="w-5 h-5" />
+                        </div>
+                        <span>DS2API</span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1 ml-8">V1.0.0 控制面板</p>
+                    <p className="text-[10px] text-muted-foreground mt-2 font-semibold tracking-[0.1em] uppercase opacity-60 px-1">V1.0.0 Admin Panel</p>
                 </div>
 
-                <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+                <nav className="flex-1 px-3 space-y-1 overflow-y-auto pt-2">
                     {NAV_ITEMS.map((item) => {
                         const Icon = item.icon
                         const isActive = activeTab === item.id
@@ -197,43 +199,44 @@ export default function App() {
                                     setSidebarOpen(false)
                                 }}
                                 className={clsx(
-                                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group",
+                                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group border",
                                     isActive
-                                        ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
-                                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                                        ? "bg-secondary text-primary border-border shadow-sm"
+                                        : "text-muted-foreground border-transparent hover:bg-secondary/80 hover:text-foreground"
                                 )}
                             >
-                                <Icon className={clsx("w-4 h-4", isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-accent-foreground")} />
-                                {item.label}
+                                <Icon className={clsx("w-4 h-4 transition-colors", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                                <span className="flex-1 text-left">{item.label}</span>
+                                {isActive && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
                             </button>
                         )
                     })}
                 </nav>
 
-                <div className="p-4 border-t border-border bg-card/50">
+                <div className="p-4 border-t border-border bg-card">
                     <div className="space-y-4">
-                        <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">API 状态</span>
-                            <span className="flex items-center gap-1.5 text-xs font-medium text-green-500 bg-green-500/10 px-2 py-0.5 rounded-full">
-                                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                                在线
+                        <div className="flex items-center justify-between text-sm px-1">
+                            <span className="text-muted-foreground font-semibold text-[10px] uppercase tracking-wider">System Status</span>
+                            <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                ONLINE
                             </span>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
-                            <div className="bg-background rounded p-2 border border-border">
-                                <div className="text-xs text-muted-foreground">账号</div>
-                                <div className="text-lg font-bold">{config.accounts?.length || 0}</div>
+                            <div className="bg-background rounded-lg p-3 border border-border shadow-sm">
+                                <div className="text-[9px] text-muted-foreground font-bold uppercase tracking-wider mb-0.5 opacity-70">Accounts</div>
+                                <div className="text-lg font-bold text-foreground leading-tight">{config.accounts?.length || 0}</div>
                             </div>
-                            <div className="bg-background rounded p-2 border border-border">
-                                <div className="text-xs text-muted-foreground">API 密钥</div>
-                                <div className="text-lg font-bold">{config.keys?.length || 0}</div>
+                            <div className="bg-background rounded-lg p-3 border border-border shadow-sm">
+                                <div className="text-[9px] text-muted-foreground font-bold uppercase tracking-wider mb-0.5 opacity-70">API Keys</div>
+                                <div className="text-lg font-bold text-foreground leading-tight">{config.keys?.length || 0}</div>
                             </div>
                         </div>
                         <button
                             onClick={handleLogout}
-                            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md border border-border text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20 transition-colors"
+                            className="w-full h-10 flex items-center justify-center gap-2 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20 transition-all"
                         >
-                            <LogOut className="w-4 h-4" />
+                            <LogOut className="w-3.5 h-3.5" />
                             退出登录
                         </button>
                     </div>
@@ -243,8 +246,13 @@ export default function App() {
             {/* Main Content */}
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
                 {/* Mobile Header */}
-                <header className="lg:hidden flex items-center justify-between p-4 border-b border-border bg-card">
-                    <span className="font-semibold">{NAV_ITEMS.find(n => n.id === activeTab)?.label}</span>
+                <header className="lg:hidden h-14 flex items-center justify-between px-4 border-b border-border bg-card">
+                    <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded bg-primary flex items-center justify-center text-primary-foreground text-[10px]">
+                            <LayoutDashboard className="w-3.5 h-3.5" />
+                        </div>
+                        <span className="font-semibold text-sm">DS2API</span>
+                    </div>
                     <button
                         onClick={() => setSidebarOpen(true)}
                         className="p-2 -mr-2 text-muted-foreground hover:text-foreground"
@@ -254,7 +262,7 @@ export default function App() {
                 </header>
 
                 {/* Content Area */}
-                <div className="flex-1 overflow-auto bg-background/50 p-2 sm:p-4 lg:p-8">
+                <div className="flex-1 overflow-auto bg-background p-4 lg:p-10">
                     <div className="max-w-6xl mx-auto space-y-4 lg:space-y-6">
                         <div className="hidden lg:block mb-8">
                             <h1 className="text-3xl font-bold tracking-tight mb-2">

@@ -92,8 +92,8 @@ export default function VercelSync({ onMessage, authFetch }) {
                         <div className="relative">
                             <input
                                 type="password"
-                                className="input-field pr-10"
-                                placeholder={preconfig?.has_token ? "正在使用预配置令牌" : "输入 Vercel 访问令牌"}
+                                className="w-full h-10 px-3 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-all pr-10"
+                                placeholder={preconfig?.has_token ? "Using pre-configured token" : "Enter Vercel Access Token"}
                                 value={vercelToken}
                                 onChange={e => setVercelToken(e.target.value)}
                             />
@@ -109,8 +109,8 @@ export default function VercelSync({ onMessage, authFetch }) {
                         <label className="text-sm font-medium">项目 ID</label>
                         <input
                             type="text"
-                            className="input-field"
-                            placeholder="prj_xxxxxxxxxxxx 或项目名称"
+                            className="w-full h-10 px-3 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-all"
+                            placeholder="prj_xxxxxxxxxxxx or Project Name"
                             value={projectId}
                             onChange={e => setProjectId(e.target.value)}
                         />
@@ -123,7 +123,7 @@ export default function VercelSync({ onMessage, authFetch }) {
                         </label>
                         <input
                             type="text"
-                            className="input-field"
+                            className="w-full h-10 px-3 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-all"
                             placeholder="team_xxxxxxxxxxxx"
                             value={teamId}
                             onChange={e => setTeamId(e.target.value)}
@@ -135,16 +135,16 @@ export default function VercelSync({ onMessage, authFetch }) {
                     <button
                         onClick={handleSync}
                         disabled={loading}
-                        className="w-full btn btn-primary flex justify-center items-center py-3 text-base shadow-lg shadow-primary/20 hover:shadow-primary/30"
+                        className="w-full flex items-center justify-center gap-2 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all font-medium text-sm shadow-sm hover:shadow-md disabled:opacity-50 disabled:shadow-none"
                     >
                         {loading ? (
                             <span className="flex items-center gap-2">
-                                <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                同步中...
+                                <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                Syncing...
                             </span>
                         ) : (
                             <span className="flex items-center gap-2">
-                                同步并重新部署 <ArrowRight className="w-5 h-5" />
+                                Sync & Redeploy <ArrowRight className="w-4 h-4" />
                             </span>
                         )}
                     </button>

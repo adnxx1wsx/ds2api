@@ -12,15 +12,16 @@ import {
     CheckCircle2,
     AlertCircle,
     ChevronDown,
-    ShieldCheck
+    ShieldCheck,
+    Terminal,
+    Zap
 } from 'lucide-react'
 import clsx from 'clsx'
 
 const MODELS = [
-    { id: 'deepseek-chat', name: 'DeepSeek Chat', icon: MessageSquare, desc: '通用聊天模型' },
-    { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner', icon: Cpu, desc: '推理能力增强模型' },
-    // Removed search models as they might be deprecated or identical to chat with search tool
-]
+    { id: "deepseek-chat", name: "deepseek-chat", icon: MessageSquare, desc: "通用高智商模型 (V3)", color: "text-amber-500" },
+    { id: "deepseek-reasoner", name: "deepseek-reasoner", icon: Cpu, desc: "深度推理/思维链 (R1)", color: "text-amber-600" },
+];
 
 export default function ApiTester({ config, onMessage, authFetch }) {
     const [model, setModel] = useState('deepseek-chat')
@@ -183,39 +184,36 @@ export default function ApiTester({ config, onMessage, authFetch }) {
     }
 
     return (
-        <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4 lg:gap-6 h-[calc(100vh-140px)] lg:h-[calc(100vh-140px)]">
+        <div className="flex flex-col lg:grid lg:grid-cols-12 gap-6 h-[calc(100vh-140px)]">
             {/* Configuration Panel */}
             <div className={clsx(
-                "lg:col-span-1 flex flex-col transition-all duration-300 ease-in-out",
+                "lg:col-span-3 flex flex-col transition-all duration-300 ease-in-out z-20",
                 configExpanded ? "h-auto" : "h-14 lg:h-full"
             )}>
-                <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden flex flex-col h-full">
+                <div className="bg-card border border-border rounded-xl flex flex-col h-full shadow-sm">
                     {/* Mobile Toggle Header */}
                     <button
                         onClick={() => setConfigExpanded(!configExpanded)}
-                        className="lg:hidden flex items-center justify-between p-4 w-full hover:bg-muted/50 transition-colors"
+                        className="lg:hidden flex items-center justify-between p-4 w-full bg-muted/20 hover:bg-muted/30 transition-colors"
                     >
-                        <div className="flex items-center gap-2 font-semibold">
-                            <Sparkles className="w-4 h-4 text-primary" />
-                            <span>模型与配置</span>
+                        <div className="flex items-center gap-2.5 font-medium text-sm text-foreground">
+                            <div className="p-1.5 rounded-md bg-transparent text-foreground">
+                                <Terminal className="w-4 h-4" />
+                            </div>
+                            <span>配置</span>
                         </div>
-                        <div className={clsx("transition-transform duration-200", configExpanded ? "rotate-180" : "")}>
+                        <div className={clsx("transition-transform duration-300 text-muted-foreground", configExpanded ? "rotate-180" : "")}>
                             <ChevronDown className="w-4 h-4" />
                         </div>
                     </button>
 
                     <div className={clsx(
-                        "p-5 space-y-5 overflow-y-auto custom-scrollbar flex-1",
+                        "p-4 space-y-6 overflow-y-auto custom-scrollbar flex-1",
                         !configExpanded && "hidden lg:block"
                     )}>
-                        <h3 className="hidden lg:flex font-semibold items-center gap-2 mb-2">
-                            <Sparkles className="w-4 h-4 text-primary" />
-                            模型选项
-                        </h3>
-
                         <div className="space-y-3">
-                            <label className="text-sm font-medium text-muted-foreground">模型</label>
-                            <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
+                            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider ml-0.5">模型</label>
+                            <div className="grid grid-cols-1 gap-2">
                                 {MODELS.map(m => {
                                     const Icon = m.icon
                                     return (
@@ -223,19 +221,29 @@ export default function ApiTester({ config, onMessage, authFetch }) {
                                             key={m.id}
                                             onClick={() => setModel(m.id)}
                                             className={clsx(
-                                                "flex items-center lg:items-center gap-2 lg:gap-3 p-2 lg:p-3 rounded-lg border text-left transition-all",
+                                                "group relative flex items-start gap-3 p-3 rounded-lg border text-left transition-all duration-200",
                                                 model === m.id
-                                                    ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                                                    : "border-border hover:bg-secondary/50"
+                                                    ? "bg-secondary border-primary/50 shadow-sm"
+                                                    : "bg-transparent border-transparent hover:bg-muted"
                                             )}
                                         >
-                                            <div className={clsx("p-1.5 lg:p-2 rounded-md shrink-0", model === m.id ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
-                                                <Icon className="w-3.5 h-3.5 lg:w-4 h-4" />
+                                            <div className={clsx(
+                                                "p-1.5 rounded-md shrink-0 transition-colors",
+                                                model === m.id ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                                            )}>
+                                                <Icon className="w-4 h-4" />
                                             </div>
-                                            <div className="min-w-0">
-                                                <div className="font-medium text-xs lg:text-sm truncate">{m.name}</div>
-                                                <div className="text-[10px] lg:text-xs text-muted-foreground truncate hidden sm:block lg:block">{m.desc}</div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className={clsx("font-medium text-sm", model === m.id ? "text-foreground" : "text-foreground/80")}>
+                                                    {m.name}
+                                                </div>
+                                                <div className="text-[11px] text-muted-foreground mt-0.5">{m.desc}</div>
                                             </div>
+                                            {model === m.id && (
+                                                <div className="absolute top-3 right-3 text-primary">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-current" />
+                                                </div>
+                                            )}
                                         </button>
                                     )
                                 })}
@@ -243,27 +251,30 @@ export default function ApiTester({ config, onMessage, authFetch }) {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-muted-foreground">账号策略</label>
-                            <select
-                                className="input-field"
-                                value={selectedAccount}
-                                onChange={e => setSelectedAccount(e.target.value)}
-                            >
-                                <option value="">🎲 随机切换 (支持流式预览)</option>
-                                {accounts.map((acc, i) => (
-                                    <option key={i} value={acc.email || acc.mobile}>
-                                        👤 {acc.email || acc.mobile}
-                                    </option>
-                                ))}
-                            </select>
+                            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider ml-0.5">账号策略</label>
+                            <div className="relative">
+                                <select
+                                    className="w-full h-10 pl-3 pr-8 bg-secondary border border-border rounded-lg text-sm appearance-none focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring transition-all cursor-pointer hover:bg-muted"
+                                    value={selectedAccount}
+                                    onChange={e => setSelectedAccount(e.target.value)}
+                                >
+                                    <option value="" className="bg-popover text-popover-foreground">🎲 随机切换 (支持流式预览)</option>
+                                    {accounts.map((acc, i) => (
+                                        <option key={i} value={acc.email || acc.mobile} className="bg-popover text-popover-foreground">
+                                            👤 {acc.email || acc.mobile}
+                                        </option>
+                                    ))}
+                                </select>
+                                <ChevronDown className="absolute right-2.5 top-3 w-4 h-4 text-muted-foreground pointer-events-none" />
+                            </div>
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-muted-foreground">API 密钥 (可选)</label>
+                            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider ml-0.5">API 密钥 (可选)</label>
                             <input
                                 type="password"
-                                className="input-field font-mono text-xs"
-                                placeholder={config.keys?.[0] ? `默认: ${config.keys[0].slice(0, 8)}...` : '输入自定义 API 密钥'}
+                                className="w-full h-10 px-3 bg-muted/30 border border-border rounded-lg text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring transition-all"
+                                placeholder={config.keys?.[0] ? `默认: ...${config.keys[0].slice(-6)}` : '输入自定义 Key'}
                                 value={apiKey}
                                 onChange={e => setApiKey(e.target.value)}
                             />
@@ -273,19 +284,17 @@ export default function ApiTester({ config, onMessage, authFetch }) {
             </div>
 
             {/* Chat Interface */}
-            <div className="lg:col-span-2 flex flex-col bg-card border border-border rounded-xl shadow-sm overflow-hidden min-h-0 flex-1">
+            <div className="lg:col-span-9 flex flex-col bg-card border border-border rounded-xl shadow-sm overflow-hidden min-h-0 flex-1 relative">
+
                 {/* Messages Area */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-8 custom-scrollbar scroll-smooth">
                     {/* User Message */}
-                    <div className="flex gap-4 max-w-3xl mx-auto">
-                        <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center shrink-0">
+                    <div className="flex gap-4 max-w-4xl mx-auto flex-row-reverse group">
+                        <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center shrink-0 border border-border">
                             <User className="w-4 h-4 text-muted-foreground" />
                         </div>
-                        <div className="space-y-1 flew-1">
-                            <div className="flex items-center gap-2">
-                                <span className="font-medium text-sm">用户</span>
-                            </div>
-                            <div className="bg-secondary/50 rounded-2xl rounded-tl-none px-4 py-3 text-sm border border-border">
+                        <div className="space-y-1 max-w-[85%] lg:max-w-[75%]">
+                            <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-5 py-3 text-sm leading-relaxed shadow-sm">
                                 {message}
                             </div>
                         </div>
@@ -293,43 +302,45 @@ export default function ApiTester({ config, onMessage, authFetch }) {
 
                     {/* AI Response */}
                     {(response || isStreaming) && (
-                        <div className="flex gap-4 max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-2">
+                        <div className="flex gap-4 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <div className={clsx(
-                                "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-                                response?.success !== false ? "bg-primary text-primary-foreground" : "bg-destructive text-destructive-foreground"
+                                "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border border-border",
+                                response?.success !== false ? "bg-muted" : "bg-destructive/10 border-destructive/20"
                             )}>
-                                <Bot className="w-4 h-4" />
+                                <Bot className={clsx("w-4 h-4", response?.success !== false ? "text-foreground" : "text-destructive")} />
                             </div>
-                            <div className="space-y-2 flex-1 min-w-0">
+                            <div className="space-y-3 flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                    <span className="font-medium text-sm">DeepSeek</span>
+                                    <span className="font-semibold text-sm text-foreground">
+                                        DeepSeek
+                                    </span>
                                     {response && (
                                         <span className={clsx(
-                                            "text-[10px] px-1.5 py-0.5 rounded border uppercase font-bold tracking-wider",
-                                            response.success ? "border-emerald-500/20 text-emerald-500 bg-emerald-500/5" : "border-destructive/20 text-destructive bg-destructive/5"
+                                            "text-[10px] px-1.5 py-0.5 rounded-sm border uppercase font-medium tracking-wider",
+                                            response.success ? "border-emerald-500/20 text-emerald-500 bg-emerald-500/10" : "border-destructive/20 text-destructive bg-destructive/10"
                                         )}>
-                                            {response.status_code || 'ERROR'}
+                                            {response.status_code || 'ERR'}
                                         </span>
                                     )}
                                 </div>
 
                                 {(streamingThinking || response?.response?.thinking) && (
-                                    <div className="text-xs text-muted-foreground bg-muted/30 border border-border rounded-lg p-3 space-y-1">
-                                        <div className="flex items-center gap-1.5 opacity-70 mb-1">
-                                            <Sparkles className="w-3 h-3" />
-                                            <span>思维链/推理过程</span>
+                                    <div className="text-xs bg-secondary/50 border border-border rounded-lg p-3 space-y-1.5">
+                                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                                            <Zap className="w-3.5 h-3.5" />
+                                            <span className="font-medium">Thinking Process</span>
                                         </div>
-                                        <div className="whitespace-pre-wrap leading-relaxed opacity-90 font-mono">
+                                        <div className="whitespace-pre-wrap leading-relaxed text-muted-foreground font-mono text-[11px] max-h-60 overflow-y-auto custom-scrollbar pl-5 border-l-2 border-border/50">
                                             {streamingThinking || response?.response?.thinking}
                                         </div>
                                     </div>
                                 )}
 
-                                <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                                <div className="text-sm leading-7 text-foreground whitespace-pre-wrap">
                                     {!selectedAccount ? (
-                                        streamingContent || (response?.error && <span className="text-destructive">{response.error}</span>)
+                                        streamingContent || (response?.error && <span className="text-destructive font-medium">{response.error}</span>)
                                     ) : (
-                                        response?.response?.message || <span className="text-muted-foreground italic">...</span>
+                                        response?.response?.message || <span className="text-muted-foreground italic">Generating response...</span>
                                     )}
                                     {isStreaming && <span className="inline-block w-1.5 h-4 bg-primary ml-1 align-middle animate-pulse" />}
                                 </div>
@@ -339,12 +350,13 @@ export default function ApiTester({ config, onMessage, authFetch }) {
                 </div>
 
                 {/* Input Area */}
-                <div className="p-4 border-t border-border bg-card">
-                    <div className="max-w-3xl mx-auto relative">
+                <div className="p-4 lg:p-6 border-t border-border bg-card">
+                    <div className="max-w-4xl mx-auto relative group">
                         <textarea
-                            className="w-full bg-secondary/30 border border-border rounded-xl pl-4 pr-14 py-3 text-sm focus:bg-background focus:ring-1 focus:ring-primary focus:border-primary transition-all resize-none custom-scrollbar"
-                            placeholder="输入消息..."
-                            rows={3}
+                            className="w-full bg-[#09090b] border border-border rounded-xl pl-4 pr-12 py-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none custom-scrollbar placeholder:text-muted-foreground/50 text-foreground shadow-inner"
+                            placeholder="Type a message..."
+                            rows={1}
+                            style={{ minHeight: '52px' }}
                             value={message}
                             onChange={e => setMessage(e.target.value)}
                             onKeyDown={e => {
@@ -358,7 +370,7 @@ export default function ApiTester({ config, onMessage, authFetch }) {
                             {loading && isStreaming ? (
                                 <button
                                     onClick={stopGeneration}
-                                    className="p-2 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90 transition-opacity"
+                                    className="p-2 text-muted-foreground hover:text-destructive transition-colors"
                                 >
                                     <Square className="w-4 h-4 fill-current" />
                                 </button>
@@ -366,12 +378,15 @@ export default function ApiTester({ config, onMessage, authFetch }) {
                                 <button
                                     onClick={sendTest}
                                     disabled={loading || !message.trim()}
-                                    className="p-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="p-2 text-primary hover:text-primary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                                 </button>
                             )}
                         </div>
+                    </div>
+                    <div className="max-w-4xl mx-auto mt-3 flex justify-center">
+                        <span className="text-[10px] text-muted-foreground/40 font-medium">DeepSeek Admin Interface</span>
                     </div>
                 </div>
             </div>

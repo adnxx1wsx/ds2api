@@ -104,10 +104,11 @@ def release_account(account: dict):
         # 从使用中移除
         if acc_id in in_use_accounts:
             del in_use_accounts[acc_id]
-        
-        # 放回队尾
-        account_queue.append(account)
-        logger.debug(f"[release_account] 释放账号: {acc_id} | 队列长度: {len(account_queue)}")
+            # 放回队尾
+            account_queue.append(account)
+            logger.debug(f"[release_account] 释放账号: {acc_id} | 队列长度: {len(account_queue)}")
+        else:
+            logger.warning(f"[release_account] 账号 {acc_id} 不在使用列表中 (可能是因为重置了队列)，跳过释放")
 
 
 # ----------------------------------------------------------------------

@@ -42,84 +42,92 @@ export default function Login({ onLogin, onMessage }) {
     }
 
     return (
-        <div className="flex flex-col items-center justify-center p-4 w-full max-w-md relative z-10">
-            <div className="w-full bg-card/50 backdrop-blur-xl border border-white/10 shadow-2xl rounded-2xl p-8 space-y-8 animate-in fade-in zoom-in-95 duration-300">
-                <div className="text-center space-y-2">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/20 text-primary mb-4 ring-1 ring-white/10 shadow-inner">
-                        <Lock className="w-8 h-8" />
-                    </div>
-                    <h1 className="text-2xl font-bold tracking-tight text-white">
-                        欢迎回来
-                    </h1>
-                    <p className="text-muted-foreground text-sm">
-                        请输入管理员密钥访问控制面板
-                    </p>
-                </div>
+        <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 bg-background text-foreground">
 
-                <form onSubmit={handleLogin} className="space-y-6">
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <label className="text-xs font-medium text-muted-foreground ml-1 uppercase tracking-wider">
-                                管理员密钥
-                            </label>
-                            <div className="relative group">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
-                                    <Key className="w-4 h-4" />
+            <div className="w-full max-w-[400px] relative z-10 animate-in fade-in zoom-in-95 duration-200">
+                <div className="w-full bg-card border border-border rounded-xl p-8 shadow-sm">
+                    <div className="text-center space-y-2 mb-8">
+                        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 text-primary mb-2">
+                            <Lock className="w-6 h-6" />
+                        </div>
+                        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                            欢迎回来
+                        </h1>
+                        <p className="text-muted-foreground text-sm">
+                            请输入管理员密钥继续
+                        </p>
+                    </div>
+
+                    <form onSubmit={handleLogin} className="space-y-4">
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-xs font-medium text-muted-foreground ml-0.5">
+                                    管理员密钥
+                                </label>
+                                <div className="relative group">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground/50 transition-colors">
+                                        <Key className="w-4 h-4" />
+                                    </div>
+                                    <input
+                                        type="password"
+                                        id="admin_key"
+                                        className="w-full h-12 px-4 bg-[#09090b] border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-foreground font-mono"
+                                        placeholder="••••••••••••••••"
+                                        value={adminKey}
+                                        onChange={(e) => setAdminKey(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                                    />
                                 </div>
-                                <input
-                                    type="password"
-                                    className="block w-full pl-10 pr-3 py-2.5 bg-secondary/50 border border-border rounded-lg text-sm placeholder:text-muted-foreground/50 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 focus:bg-secondary focus:outline-none transition-all duration-200"
-                                    placeholder="输入您的 DS2API_ADMIN_KEY"
-                                    value={adminKey}
-                                    onChange={e => setAdminKey(e.target.value)}
-                                    autoFocus
-                                />
+                            </div>
+
+                            <div className="flex items-center space-x-2.5">
+                                <button
+                                    type="button"
+                                    role="checkbox"
+                                    aria-checked={remember}
+                                    onClick={() => setRemember(!remember)}
+                                    className={clsx(
+                                        "w-4 h-4 rounded border flex items-center justify-center transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring/40",
+                                        remember ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/40 bg-transparent hover:border-muted-foreground"
+                                    )}
+                                >
+                                    {remember && <div className="w-2 h-2 rounded-[1px] bg-current" />}
+                                </button>
+                                <span
+                                    onClick={() => setRemember(!remember)}
+                                    className="text-xs text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors"
+                                >
+                                    记住登录状态
+                                </span>
                             </div>
                         </div>
 
-                        <div className="flex items-center space-x-2">
-                            <button
-                                type="button"
-                                role="checkbox"
-                                aria-checked={remember}
-                                onClick={() => setRemember(!remember)}
-                                className={clsx(
-                                    "w-4 h-4 rounded border flex items-center justify-center transition-all duration-200",
-                                    remember ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/50 bg-transparent"
-                                )}
-                            >
-                                {remember && <div className="w-2 h-2 rounded-[1px] bg-current" />}
-                            </button>
-                            <span
-                                onClick={() => setRemember(!remember)}
-                                className="text-sm text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors"
-                            >
-                                记住登录状态
-                            </span>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full flex items-center justify-center py-2.5 px-4 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-medium text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {loading ? (
+                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                                <div className="flex items-center gap-2">
+                                    <span>登录</span>
+                                    <ArrowRight className="w-4 h-4" />
+                                </div>
+                            )}
+                        </button>
+                    </form>
+
+                    <div className="mt-6 pt-6 border-t border-border flex justify-center">
+                        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60 font-medium tracking-wide uppercase">
+                            <ShieldCheck className="w-3 h-3" />
+                            <span>Secured Connection</span>
                         </div>
                     </div>
+                </div>
 
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full flex items-center justify-center py-2.5 px-4 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-medium text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 active:translate-y-0"
-                    >
-                        {loading ? (
-                            <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                            <>
-                                <span>进入控制面板</span>
-                                <ArrowRight className="w-4 h-4 ml-2" />
-                            </>
-                        )}
-                    </button>
-                </form>
-
-                <div className="pt-6 border-t border-border/50 text-center">
-                    <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground/70">
-                        <ShieldCheck className="w-3 h-3" />
-                        <span>安全会话 • 24小时有效</span>
-                    </div>
+                <div className="mt-8 text-center">
+                    <p className="text-[10px] text-muted-foreground/30 font-mono">DS2API Admin Portal</p>
                 </div>
             </div>
         </div>

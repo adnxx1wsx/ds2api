@@ -134,7 +134,7 @@ export default function BatchImport({ onRefresh, onMessage, authFetch }) {
     }
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-140px)]">
+        <div className="flex flex-col lg:grid lg:grid-cols-3 gap-6 lg:h-[calc(100vh-140px)]">
             {/* Templates Panel */}
             <div className="md:col-span-1 space-y-4">
                 <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
@@ -166,10 +166,10 @@ export default function BatchImport({ onRefresh, onMessage, authFetch }) {
                     </p>
                     <button
                         onClick={copyBase64}
-                        className="w-full btn btn-primary bg-primary/90 hover:bg-primary shadow-lg shadow-primary/20"
+                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all font-medium text-sm shadow-sm"
                     >
-                        {copied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
-                        {copied ? '已复制！' : '复制 Base64 配置'}
+                        {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        {copied ? 'Copied' : 'Copy Base64 Config'}
                     </button>
                     <p className="text-[10px] text-muted-foreground mt-2 text-center">
                         变量名: <code className="bg-background px-1 py-0.5 rounded border border-border">DS2API_CONFIG_JSON</code>
@@ -178,25 +178,25 @@ export default function BatchImport({ onRefresh, onMessage, authFetch }) {
             </div>
 
             {/* Editor Panel */}
-            <div className="md:col-span-2 flex flex-col bg-card border border-border rounded-xl shadow-sm overflow-hidden h-full">
+            <div className="lg:col-span-2 flex flex-col bg-card border border-border rounded-xl shadow-sm overflow-hidden min-h-[400px] lg:h-full">
                 <div className="p-4 border-b border-border flex items-center justify-between bg-muted/20">
                     <h3 className="font-semibold flex items-center gap-2">
                         <Upload className="w-4 h-4 text-primary" />
                         JSON 编辑器
                     </h3>
                     <div className="flex gap-2">
-                        <button onClick={handleExport} className="btn btn-secondary text-xs h-8">
-                            加载当前配置
+                        <button onClick={handleExport} className="px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors text-xs font-medium border border-border">
+                            Load Current
                         </button>
-                        <button onClick={handleImport} disabled={loading} className="btn btn-primary text-xs h-8">
-                            {loading ? '导入中...' : '模拟导入/应用'}
+                        <button onClick={handleImport} disabled={loading} className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-xs font-medium disabled:opacity-50">
+                            {loading ? 'Importing...' : 'Apply Config'}
                         </button>
                     </div>
                 </div>
 
-                <div className="flex-1 relative">
+                <div className="flex-1 relative min-h-[400px]">
                     <textarea
-                        className="absolute inset-0 w-full h-full p-4 font-mono text-sm bg-secondary/10 resize-none focus:outline-none custom-scrollbar"
+                        className="absolute inset-0 w-full h-full p-4 font-mono text-sm bg-[#09090b] text-foreground resize-none focus:outline-none custom-scrollbar"
                         value={jsonInput}
                         onChange={e => setJsonInput(e.target.value)}
                         placeholder={'{\n  "keys": ["your-api-key"],\n  "accounts": [\n    {"email": "...", "password": "...", "token": ""}\n  ]\n}'}
