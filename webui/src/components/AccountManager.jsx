@@ -10,7 +10,9 @@ import {
     MoreHorizontal,
     X,
     Server,
-    ShieldCheck
+    ShieldCheck,
+    Copy,
+    Check
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -18,6 +20,7 @@ export default function AccountManager({ config, onRefresh, onMessage, authFetch
     const [showAddKey, setShowAddKey] = useState(false)
     const [showAddAccount, setShowAddAccount] = useState(false)
     const [newKey, setNewKey] = useState('')
+    const [copiedKey, setCopiedKey] = useState(null)
     const [newAccount, setNewAccount] = useState({ email: '', mobile: '', password: '' })
     const [loading, setLoading] = useState(false)
     const [validating, setValidating] = useState({})
@@ -298,15 +301,34 @@ export default function AccountManager({ config, onRefresh, onMessage, authFetch
                     {config.keys?.length > 0 ? (
                         config.keys.map((key, i) => (
                             <div key={i} className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors group">
-                                <div className="font-mono text-sm bg-muted/50 px-3 py-1 rounded inline-block">
-                                    {key.slice(0, 16)}****
+                                <div className="flex items-center gap-2">
+                                    <div className="font-mono text-sm bg-muted/50 px-3 py-1 rounded inline-block">
+                                        {key.slice(0, 16)}****
+                                    </div>
+                                    {copiedKey === key && (
+                                        <span className="text-xs text-green-500 animate-pulse">已复制</span>
+                                    )}
                                 </div>
-                                <button
-                                    onClick={() => deleteKey(key)}
-                                    className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors opacity-0 group-hover:opacity-100"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(key)
+                                            setCopiedKey(key)
+                                            setTimeout(() => setCopiedKey(null), 2000)
+                                        }}
+                                        className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                                        title="复制密钥"
+                                    >
+                                        {copiedKey === key ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                                    </button>
+                                    <button
+                                        onClick={() => deleteKey(key)}
+                                        className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                                        title="删除密钥"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
                             </div>
                         ))
                     ) : (
@@ -445,14 +467,24 @@ export default function AccountManager({ config, onRefresh, onMessage, authFetch
                             <div className="p-6 space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium mb-1.5">新密钥值</label>
-                                    <input
-                                        type="text"
-                                        className="input-field bg-[#09090b]"
-                                        placeholder="输入自定义 API 密钥"
-                                        value={newKey}
-                                        onChange={e => setNewKey(e.target.value)}
-                                        autoFocus
-                                    />
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            className="input-field bg-[#09090b] flex-1"
+                                            placeholder="输入自定义 API 密钥"
+                                            value={newKey}
+                                            onChange={e => setNewKey(e.target.value)}
+                                            autoFocus
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setNewKey('sk-' + crypto.randomUUID().replace(/-/g, ''))}
+                                            className="px-3 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors text-sm font-medium border border-border whitespace-nowrap"
+                                        >
+                                            生成
+                                        </button>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1.5">点击「生成」自动创建随机密钥</p>
                                 </div>
                                 <div className="flex justify-end gap-2 pt-2">
                                     <button onClick={() => setShowAddKey(false)} className="px-4 py-2 rounded-lg border border-border hover:bg-secondary transition-colors text-sm font-medium">取消</button>
