@@ -414,3 +414,37 @@ def should_filter_citation(text: str, search_enabled: bool) -> bool:
     if not search_enabled:
         return False
     return _CITATION_PATTERN.match(text) is not None
+
+
+# ----------------------------------------------------------------------
+# 工具调用格式化
+# ----------------------------------------------------------------------
+
+def format_openai_tool_calls(
+    detected_tools: List[Dict[str, Any]], 
+    base_id: str = ""
+) -> List[Dict[str, Any]]:
+    """将检测到的工具调用格式化为 OpenAI API 格式
+    
+    Args:
+        detected_tools: parse_tool_calls 返回的工具调用列表
+        base_id: 用于生成唯一 ID 的基础字符串（可选）
+        
+    Returns:
+        OpenAI 格式的 tool_calls 数组，例如：
+        [{"id": "call_xxx", "type": "function", "function": {"name": "...", "arguments": "..."}}]
+    """
+    import random
+    import time
+    
+    tool_calls_data = []
+    for idx, tool_info in enumerate(detected_tools):
+        tool_calls_data.append({
+            "id": f"call_{base_id or int(time.time())}_{random.randint(1000,9999)}_{idx}",
+            "type": "function",
+            "function": {
+                "name": tool_info["name"],
+                "arguments": json.dumps(tool_info.get("input", {}), ensure_ascii=False)
+            }
+        })
+    return tool_calls_data

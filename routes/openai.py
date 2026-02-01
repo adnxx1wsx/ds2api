@@ -31,6 +31,7 @@ from core.sse_parser import (
     extract_content_recursive,
     should_filter_citation,
     parse_tool_calls,
+    format_openai_tool_calls,
 )
 from core.constants import (
     KEEP_ALIVE_TIMEOUT,
@@ -321,16 +322,7 @@ IMPORTANT: If calling tools, output ONLY the JSON. The response must start with 
                                 
                                 if detected_tools:
                                     # 发送工具调用响应
-                                    tool_calls_data = []
-                                    for idx, tool_info in enumerate(detected_tools):
-                                        tool_calls_data.append({
-                                            "id": f"call_{int(time.time())}_{random.randint(1000,9999)}_{idx}",
-                                            "type": "function",
-                                            "function": {
-                                                "name": tool_info["name"],
-                                                "arguments": json.dumps(tool_info["input"], ensure_ascii=False)
-                                            }
-                                        })
+                                    tool_calls_data = format_openai_tool_calls(detected_tools)
                                     tool_chunk = {
                                         "id": completion_id,
                                         "object": "chat.completion.chunk",
@@ -420,16 +412,7 @@ IMPORTANT: If calling tools, output ONLY the JSON. The response must start with 
                                 finish_reason = "tool_calls"
                         
                         if detected_tools:
-                            tool_calls_data = []
-                            for idx, tool_info in enumerate(detected_tools):
-                                tool_calls_data.append({
-                                    "id": f"call_{int(time.time())}_{random.randint(1000,9999)}_{idx}",
-                                    "type": "function",
-                                    "function": {
-                                        "name": tool_info["name"],
-                                        "arguments": json.dumps(tool_info["input"], ensure_ascii=False)
-                                    }
-                                })
+                            tool_calls_data = format_openai_tool_calls(detected_tools)
                             tool_chunk = {
                                 "id": completion_id,
                                 "object": "chat.completion.chunk",
@@ -534,16 +517,7 @@ IMPORTANT: If calling tools, output ONLY the JSON. The response must start with 
                                                     message_obj["reasoning_content"] = final_reasoning
                                                 # 添加工具调用
                                                 if detected_tools:
-                                                    tool_calls_data = []
-                                                    for idx, tool_info in enumerate(detected_tools):
-                                                        tool_calls_data.append({
-                                                            "id": f"call_{int(time.time())}_{random.randint(1000,9999)}_{idx}",
-                                                            "type": "function",
-                                                            "function": {
-                                                                "name": tool_info["name"],
-                                                                "arguments": json.dumps(tool_info["input"], ensure_ascii=False)
-                                                            }
-                                                        })
+                                                    tool_calls_data = format_openai_tool_calls(detected_tools)
                                                     message_obj["tool_calls"] = tool_calls_data
                                                     message_obj["content"] = None
                                                 
@@ -608,16 +582,7 @@ IMPORTANT: If calling tools, output ONLY the JSON. The response must start with 
                             message_obj["reasoning_content"] = final_reasoning
                         # 添加工具调用
                         if detected_tools:
-                            tool_calls_data = []
-                            for idx, tool_info in enumerate(detected_tools):
-                                tool_calls_data.append({
-                                    "id": f"call_{int(time.time())}_{random.randint(1000,9999)}_{idx}",
-                                    "type": "function",
-                                    "function": {
-                                        "name": tool_info["name"],
-                                        "arguments": json.dumps(tool_info["input"], ensure_ascii=False)
-                                    }
-                                })
+                            tool_calls_data = format_openai_tool_calls(detected_tools)
                             message_obj["tool_calls"] = tool_calls_data
                             message_obj["content"] = None
                         
