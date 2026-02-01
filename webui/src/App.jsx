@@ -184,7 +184,7 @@ export default function App() {
                         </div>
                         <span>DS2API</span>
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-2 font-semibold tracking-[0.1em] uppercase opacity-60 px-1">V1.0.0 管理面板</p>
+                    <p className="text-[10px] text-muted-foreground mt-2 font-semibold tracking-[0.1em] uppercase opacity-60 px-1">在线管理面板</p>
                 </div>
 
                 <nav className="flex-1 px-3 space-y-1 overflow-y-auto pt-2">

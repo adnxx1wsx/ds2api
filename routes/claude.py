@@ -20,12 +20,14 @@ from core.session_manager import (
     cleanup_account,
 )
 from core.models import get_model_config, get_claude_models_response
-from core.stream_parser import (
+from core.sse_parser import (
     parse_deepseek_sse_line,
+    parse_sse_chunk_for_content,
     extract_content_from_chunk,
     collect_deepseek_response,
     parse_tool_calls,
 )
+from core.constants import STREAM_IDLE_TIMEOUT
 from core.utils import estimate_tokens
 from core.messages import (
     messages_prepare,
@@ -34,6 +36,7 @@ from core.messages import (
 )
 
 router = APIRouter()
+
 
 
 # ----------------------------------------------------------------------
@@ -201,9 +204,7 @@ Remember: Output ONLY the JSON, no other text. The response must start with {{ a
         if bool(req_data.get("stream", False)):
 
             def claude_sse_stream():
-                # 智能超时配置
-                STREAM_IDLE_TIMEOUT = 30  # 无新内容超时（秒）
-                
+                # 使用导入的常量（不再本地定义）
                 try:
                     message_id = f"msg_{int(time.time())}_{random.randint(1000, 9999)}"
                     input_tokens = sum(len(str(m.get("content", ""))) for m in messages) // 4
@@ -211,6 +212,7 @@ Remember: Output ONLY the JSON, no other text. The response must start with {{ a
                     full_response_text = ""
                     last_content_time = time.time()
                     has_content = False
+
 
                     for line in deepseek_resp.iter_lines():
                         current_time = time.time()

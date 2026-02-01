@@ -23,14 +23,12 @@ from core.session_manager import (
     cleanup_account,
 )
 from core.models import get_model_config, get_openai_models_response
-from core.stream_parser import (
-    parse_deepseek_sse_line,
-    extract_content_from_chunk,
-    should_filter_citation,
-)
 from core.sse_parser import (
+    parse_deepseek_sse_line,
     parse_sse_chunk_for_content,
+    extract_content_from_chunk,
     extract_content_recursive,
+    should_filter_citation,
 )
 from core.constants import (
     KEEP_ALIVE_TIMEOUT,
@@ -43,6 +41,8 @@ router = APIRouter()
 
 # 预编译正则表达式（性能优化）
 _CITATION_PATTERN = re.compile(r"^\[citation:")
+
+
 
 
 
