@@ -9,22 +9,12 @@
 
 services:
   ds2api:
-    build: .
+    build:
+      context: .
+      target: go-builder
     image: ds2api:dev
     container_name: ds2api-dev
-    command: [
-      "uvicorn",
-      "app:app",
-      "--host",
-      "0.0.0.0",
-      "--port",
-      "5001",
-      "--reload",
-      "--reload-dir",
-      "/app",
-      "--log-level",
-      "debug"
-    ]
+    command: ["go", "run", "./cmd/ds2api"]
     ports:
       - "${PORT:-5001}:5001"
     env_file:
@@ -34,10 +24,7 @@ services:
       - LOG_LEVEL=DEBUG
     volumes:
       # 源代码挂载（开发时实时生效）
-      - ./app.py:/app/app.py:ro
-      - ./core:/app/core:ro
-      - ./routes:/app/routes:ro
-      - ./static:/app/static:ro
+      - ./:/app
       # 配置文件挂载（便于本地修改）
       - ./config.json:/app/config.json
     restart: "no"

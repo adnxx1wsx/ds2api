@@ -68,15 +68,12 @@ Convert DeepSeek Web into an **OpenAI & Claude compatible API**, with multi-acco
 git clone https://github.com/CJackHwang/ds2api.git
 cd ds2api
 
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Configure accounts
+# 2. Configure accounts
 cp config.example.json config.json
 # Edit config.json to add DeepSeek account info
 
-# 4. Start the service
-python dev.py
+# 3. Start the service (Go runtime)
+go run ./cmd/ds2api
 ```
 
 Visit `http://localhost:5001` after startup.

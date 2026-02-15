@@ -70,15 +70,12 @@
 git clone https://github.com/CJackHwang/ds2api.git
 cd ds2api
 
-# 2. 安装依赖
-pip install -r requirements.txt
-
-# 3. 配置账号
+# 2. 准备配置
 cp config.example.json config.json
 # 编辑 config.json，添加 DeepSeek 账号信息
 
-# 4. 启动服务
-python dev.py
+# 3. 启动服务（Go 版本）
+go run ./cmd/ds2api
 ```
 
 服务启动后访问 `http://localhost:5001`

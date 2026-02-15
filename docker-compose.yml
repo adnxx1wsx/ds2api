@@ -1,13 +1,3 @@
-# DS2API 生产环境配置
-# 使用说明：
-#   1. 复制 .env.example 为 .env 并填写配置
-#   2. docker-compose up -d
-#   3. 主代码更新后：docker-compose up -d --build
-#
-# 设计原则：
-#   - 零侵入：所有项目配置通过 .env 文件传递
-#   - 易维护：主代码更新只需重新构建镜像
-
 services:
   ds2api:
     build: .
@@ -18,11 +8,10 @@ services:
     env_file:
       - .env
     environment:
-      # 确保容器内使用正确的主机绑定
       - HOST=0.0.0.0
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/v1/models')"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:5001/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
