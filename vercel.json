@@ -2,10 +2,7 @@
   "version": 2,
   "functions": {
     "api/index.go": {
-      "includeFiles": [
-        "static/admin/**",
-        "sha3_wasm_bg.7b9ca65ddd.wasm"
-      ]
+      "includeFiles": "{static/admin/**,sha3_wasm_bg.7b9ca65ddd.wasm}"
     }
   },
   "rewrites": [
