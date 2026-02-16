@@ -1,85 +1,119 @@
-# DS2API 接口文档（Go 实现）
+# DS2API 接口文档
 
 语言 / Language: [中文](API.md) | [English](API.en.md)
 
-本文档描述当前代码库的实际 API 行为（Go 后端）。
+本文档描述当前 Go 代码库的实际 API 行为。
+
+---
+
+## 目录
+
+- [基础信息](#基础信息)
+- [鉴权规则](#鉴权规则)
+- [路由总览](#路由总览)
+- [健康检查](#健康检查)
+- [OpenAI 兼容接口](#openai-兼容接口)
+- [Claude 兼容接口](#claude-兼容接口)
+- [Admin 接口](#admin-接口)
+- [错误响应格式](#错误响应格式)
+- [cURL 示例](#curl-示例)
+
+---
 
 ## 基础信息
 
-- Base URL：`http://localhost:5001` 或你的部署域名
-- 默认返回：`application/json`
-- 健康检查：`GET /healthz`、`GET /readyz`
+| 项目 | 说明 |
+| --- | --- |
+| Base URL | `http://localhost:5001` 或你的部署域名 |
+| 默认 Content-Type | `application/json` |
+| 健康检查 | `GET /healthz`、`GET /readyz` |
+| CORS | 已启用（`Access-Control-Allow-Origin: *`） |
 
-### 鉴权规则
+---
 
-业务接口（`/v1/*`、`/anthropic/*`）支持两种传参：
+## 鉴权规则
 
-1. `Authorization: Bearer <token>`
-2. `x-api-key: <token>`（无 `Bearer` 前缀）
+### 业务接口（`/v1/*`、`/anthropic/*`）
 
-Admin 接口：
+支持两种传参方式：
 
-- `POST /admin/login` 无需鉴权
-- `GET /admin/verify` 需要 `Authorization: Bearer <jwt>`（仅 JWT）
-- 其他 `/admin/*` 保护接口支持：
-- `Authorization: Bearer <jwt>`
-- `Authorization: Bearer <admin_key>`（直传管理密钥）
+| 方式 | 示例 |
+| --- | --- |
+| Bearer Token | `Authorization: Bearer <token>` |
+| API Key Header | `x-api-key: <token>`（无 `Bearer` 前缀） |
+
+**鉴权行为**：
+
+- token 在 `config.keys` 中 → **托管账号模式**，自动轮询选择账号
+- token 不在 `config.keys` 中 → **直通 token 模式**，直接作为 DeepSeek token 使用
+
+**可选请求头**：`X-Ds2-Target-Account: <email_or_mobile>` — 指定使用某个托管账号。
+
+### Admin 接口（`/admin/*`）
+
+| 端点 | 鉴权 |
+| --- | --- |
+| `POST /admin/login` | 无需鉴权 |
+| `GET /admin/verify` | `Authorization: Bearer <jwt>`（仅 JWT） |
+| 其他 `/admin/*` | `Authorization: Bearer <jwt>` 或 `Authorization: Bearer <admin_key>`（直传管理密钥） |
+
+---
 
 ## 路由总览
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | `/healthz` | 存活探针 |
-| GET | `/readyz` | 就绪探针 |
-| GET | `/v1/models` | OpenAI 模型列表 |
-| POST | `/v1/chat/completions` | OpenAI 对话补全 |
-| GET | `/anthropic/v1/models` | Claude 模型列表 |
-| POST | `/anthropic/v1/messages` | Claude 消息接口 |
-| POST | `/anthropic/v1/messages/count_tokens` | Claude token 计数 |
-| POST | `/admin/login` | 管理登录 |
-| GET | `/admin/verify` | 校验管理 JWT |
-| GET | `/admin/vercel/config` | 读取 Vercel 预配置 |
-| GET | `/admin/config` | 读取配置（脱敏） |
-| POST | `/admin/config` | 更新配置 |
-| POST | `/admin/keys` | 添加 API key |
-| DELETE | `/admin/keys/{key}` | 删除 API key |
-| GET | `/admin/accounts` | 分页账号列表 |
-| POST | `/admin/accounts` | 添加账号 |
-| DELETE | `/admin/accounts/{identifier}` | 删除账号 |
-| GET | `/admin/queue/status` | 账号队列状态 |
-| POST | `/admin/accounts/test` | 测试单个账号 |
-| POST | `/admin/accounts/test-all` | 测试全部账号 |
-| POST | `/admin/import` | 批量导入 keys/accounts |
-| POST | `/admin/test` | 测试当前 API 可用性 |
-| POST | `/admin/vercel/sync` | 同步配置到 Vercel |
-| GET | `/admin/vercel/status` | Vercel 同步状态 |
-| GET | `/admin/export` | 导出配置 JSON/Base64 |
+| 方法 | 路径 | 鉴权 | 说明 |
+| --- | --- | --- | --- |
+| GET | `/healthz` | 无 | 存活探针 |
+| GET | `/readyz` | 无 | 就绪探针 |
+| GET | `/v1/models` | 无 | OpenAI 模型列表 |
+| POST | `/v1/chat/completions` | 业务 | OpenAI 对话补全 |
+| GET | `/anthropic/v1/models` | 无 | Claude 模型列表 |
+| POST | `/anthropic/v1/messages` | 业务 | Claude 消息接口 |
+| POST | `/anthropic/v1/messages/count_tokens` | 业务 | Claude token 计数 |
+| POST | `/admin/login` | 无 | 管理登录 |
+| GET | `/admin/verify` | JWT | 校验管理 JWT |
+| GET | `/admin/vercel/config` | Admin | 读取 Vercel 预配置 |
+| GET | `/admin/config` | Admin | 读取配置（脱敏） |
+| POST | `/admin/config` | Admin | 更新配置 |
+| POST | `/admin/keys` | Admin | 添加 API key |
+| DELETE | `/admin/keys/{key}` | Admin | 删除 API key |
+| GET | `/admin/accounts` | Admin | 分页账号列表 |
+| POST | `/admin/accounts` | Admin | 添加账号 |
+| DELETE | `/admin/accounts/{identifier}` | Admin | 删除账号 |
+| GET | `/admin/queue/status` | Admin | 账号队列状态 |
+| POST | `/admin/accounts/test` | Admin | 测试单个账号 |
+| POST | `/admin/accounts/test-all` | Admin | 测试全部账号 |
+| POST | `/admin/import` | Admin | 批量导入 keys/accounts |
+| POST | `/admin/test` | Admin | 测试当前 API 可用性 |
+| POST | `/admin/vercel/sync` | Admin | 同步配置到 Vercel |
+| GET | `/admin/vercel/status` | Admin | Vercel 同步状态 |
+| GET | `/admin/export` | Admin | 导出配置 JSON/Base64 |
+
+---
 
 ## 健康检查
 
 ### `GET /healthz`
 
-响应：
-
 ```json
-{"status":"ok"}
+{"status": "ok"}
 ```
 
 ### `GET /readyz`
 
-响应：
-
 ```json
-{"status":"ready"}
+{"status": "ready"}
 ```
+
+---
 
 ## OpenAI 兼容接口
 
 ### `GET /v1/models`
 
-无需鉴权。
+无需鉴权。返回当前支持的模型列表。
 
-响应示例：
+**响应示例**：
 
 ```json
 {
@@ -95,24 +129,24 @@ Admin 接口：
 
 ### `POST /v1/chat/completions`
 
-请求头示例：
+**请求头**：
 
 ```http
 Authorization: Bearer your-api-key
 Content-Type: application/json
 ```
 
-请求体核心字段：
+**请求体**：
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `model` | string | 是 | `deepseek-chat` / `deepseek-reasoner` / `deepseek-chat-search` / `deepseek-reasoner-search` |
-| `messages` | array | 是 | OpenAI 风格消息数组 |
-| `stream` | boolean | 否 | 默认 `false` |
-| `tools` | array | 否 | Function Calling 定义 |
-| `temperature` 等 | any | 否 | 兼容透传字段（最终是否生效由上游决定） |
+| `model` | string | ✅ | `deepseek-chat` / `deepseek-reasoner` / `deepseek-chat-search` / `deepseek-reasoner-search` |
+| `messages` | array | ✅ | OpenAI 风格消息数组 |
+| `stream` | boolean | ❌ | 默认 `false` |
+| `tools` | array | ❌ | Function Calling 定义 |
+| `temperature` 等 | any | ❌ | 兼容透传字段（最终效果由上游决定） |
 
-非流式响应示例：
+#### 非流式响应
 
 ```json
 {
@@ -142,16 +176,9 @@ Content-Type: application/json
 }
 ```
 
-### OpenAI 流式（`stream=true`）
+#### 流式响应（`stream=true`）
 
 SSE 格式：每段为 `data: <json>\n\n`，结束为 `data: [DONE]`。
-
-- 首次 delta 可能包含 `role: assistant`
-- reasoner 模型会输出 `delta.reasoning_content`
-- 普通文本输出 `delta.content`
-- 最后一段包含 `finish_reason`，并附带 usage
-
-示例：
 
 ```text
 data: {"id":"...","object":"chat.completion.chunk","choices":[{"delta":{"role":"assistant"},"index":0}]}
@@ -165,15 +192,18 @@ data: {"id":"...","object":"chat.completion.chunk","choices":[{"delta":{},"index
 data: [DONE]
 ```
 
-### Tool Calls（重点）
+**字段说明**：
 
-请求中带 `tools` 时，服务端会注入工具提示并尝试解析模型输出。
+- 首个 delta 包含 `role: assistant`
+- `deepseek-reasoner` / `deepseek-reasoner-search` 模型输出 `delta.reasoning_content`
+- 普通文本输出 `delta.content`
+- 最后一段包含 `finish_reason` 和 `usage`
 
-- 非流式：若识别到工具调用，返回 `message.tool_calls`，并设置 `finish_reason=tool_calls`，`message.content=null`
-- 流式：为防止原始 toolcall JSON 泄漏，正文会先缓冲；若识别到工具调用，仅输出结构化 `delta.tool_calls`
-- 流式 `delta.tool_calls` 兼容严格客户端：每个 tool call 对象都带 `index`（从 `0` 开始）
+#### Tool Calls
 
-工具调用响应示例：
+当请求中含 `tools` 时，DS2API 做防泄漏处理：
+
+**非流式**：识别到工具调用时，返回 `message.tool_calls`，设置 `finish_reason=tool_calls`，`message.content=null`。
 
 ```json
 {
@@ -200,13 +230,17 @@ data: [DONE]
 }
 ```
 
+**流式**：先缓冲正文片段。识别到工具调用 → 仅输出结构化 `delta.tool_calls`（每个 tool call 带 `index`）；否则一次性输出普通文本。
+
+---
+
 ## Claude 兼容接口
 
 ### `GET /anthropic/v1/models`
 
 无需鉴权。
 
-响应示例：
+**响应示例**：
 
 ```json
 {
@@ -221,7 +255,7 @@ data: [DONE]
 
 ### `POST /anthropic/v1/messages`
 
-请求头可用：
+**请求头**：
 
 ```http
 x-api-key: your-api-key
@@ -229,18 +263,18 @@ Content-Type: application/json
 anthropic-version: 2023-06-01
 ```
 
-请求体核心字段：
+**请求体**：
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `model` | string | 是 | `claude-sonnet-4-20250514` / `-fast` / `-slow` |
-| `messages` | array | 是 | Claude 风格消息数组 |
-| `max_tokens` | number | 否 | 当前实现不会硬性截断上游输出 |
-| `stream` | boolean | 否 | 默认 `false` |
-| `system` | string | 否 | 可选系统提示 |
-| `tools` | array | 否 | Claude tool 定义 |
+| `model` | string | ✅ | `claude-sonnet-4-20250514` / `-fast` / `-slow` |
+| `messages` | array | ✅ | Claude 风格消息数组 |
+| `max_tokens` | number | ❌ | 当前实现不会硬性截断上游输出 |
+| `stream` | boolean | ❌ | 默认 `false` |
+| `system` | string | ❌ | 可选系统提示 |
+| `tools` | array | ❌ | Claude tool 定义 |
 
-非流式响应示例：
+#### 非流式响应
 
 ```json
 {
@@ -260,13 +294,11 @@ anthropic-version: 2023-06-01
 }
 ```
 
-若识别到工具调用，`stop_reason=tool_use`，并在 `content` 中返回 `tool_use` block。
+若识别到工具调用，`stop_reason=tool_use`，`content` 中返回 `tool_use` block。
 
-### Claude 流式（`stream=true`）
+#### 流式响应（`stream=true`）
 
-返回 SSE，包含 `event:` + `data:` 双行；JSON 中仍保留 `type` 字段。
-
-示例：
+SSE 使用 `event:` + `data:` 双行格式，JSON 中保留 `type` 字段。
 
 ```text
 event: message_start
@@ -291,15 +323,15 @@ event: message_stop
 data: {"type":"message_stop"}
 ```
 
-说明：
+**说明**：
 
-- 开启思维模型时会输出 `thinking_delta`。
-- 当前不会输出 `signature_delta`（上游 DeepSeek 未提供可验证签名）。
-- `tools` 场景优先避免泄露原始工具 JSON，不强制发送 `input_json_delta`。
+- 思维模型（`-slow`）会输出 `thinking_delta`
+- 不会输出 `signature_delta`（上游 DeepSeek 未提供可验证签名）
+- `tools` 场景优先避免泄露原始工具 JSON，不强制发送 `input_json_delta`
 
 ### `POST /anthropic/v1/messages/count_tokens`
 
-请求示例：
+**请求**：
 
 ```json
 {
@@ -310,7 +342,7 @@ data: {"type":"message_stop"}
 }
 ```
 
-响应示例：
+**响应**：
 
 ```json
 {
@@ -318,11 +350,15 @@ data: {"type":"message_stop"}
 }
 ```
 
+---
+
 ## Admin 接口
 
 ### `POST /admin/login`
 
-请求：
+无需鉴权。
+
+**请求**：
 
 ```json
 {
@@ -331,9 +367,9 @@ data: {"type":"message_stop"}
 }
 ```
 
-说明：`expire_hours` 可省略，默认 24。
+`expire_hours` 可省略，默认 `24`。
 
-响应：
+**响应**：
 
 ```json
 {
@@ -345,9 +381,9 @@ data: {"type":"message_stop"}
 
 ### `GET /admin/verify`
 
-请求头：`Authorization: Bearer <jwt>`
+需要 JWT：`Authorization: Bearer <jwt>`
 
-响应：
+**响应**：
 
 ```json
 {
@@ -359,7 +395,7 @@ data: {"type":"message_stop"}
 
 ### `GET /admin/vercel/config`
 
-返回是否存在 Vercel 预配置：
+返回 Vercel 预配置状态。
 
 ```json
 {
@@ -371,7 +407,7 @@ data: {"type":"message_stop"}
 
 ### `GET /admin/config`
 
-返回脱敏配置：
+返回脱敏后的配置。
 
 ```json
 {
@@ -396,7 +432,7 @@ data: {"type":"message_stop"}
 
 可更新 `keys`、`accounts`、`claude_mapping`。
 
-请求示例：
+**请求**：
 
 ```json
 {
@@ -413,34 +449,26 @@ data: {"type":"message_stop"}
 
 ### `POST /admin/keys`
 
-请求：
-
 ```json
-{"key":"new-api-key"}
+{"key": "new-api-key"}
 ```
 
-响应：
-
-```json
-{"success":true,"total_keys":3}
-```
+**响应**：`{"success": true, "total_keys": 3}`
 
 ### `DELETE /admin/keys/{key}`
 
-响应：
-
-```json
-{"success":true,"total_keys":2}
-```
+**响应**：`{"success": true, "total_keys": 2}`
 
 ### `GET /admin/accounts`
 
-查询参数：
+**查询参数**：
 
-- `page`（默认 1）
-- `page_size`（默认 10，最大 100）
+| 参数 | 默认 | 范围 |
+| --- | --- | --- |
+| `page` | `1` | ≥ 1 |
+| `page_size` | `10` | 1–100 |
 
-响应：
+**响应**：
 
 ```json
 {
@@ -462,31 +490,19 @@ data: {"type":"message_stop"}
 
 ### `POST /admin/accounts`
 
-请求示例：
-
 ```json
-{"email":"user@example.com","password":"pwd"}
+{"email": "user@example.com", "password": "pwd"}
 ```
 
-响应：
-
-```json
-{"success":true,"total_accounts":6}
-```
+**响应**：`{"success": true, "total_accounts": 6}`
 
 ### `DELETE /admin/accounts/{identifier}`
 
 `identifier` 为 email 或 mobile。
 
-响应：
-
-```json
-{"success":true,"total_accounts":5}
-```
+**响应**：`{"success": true, "total_accounts": 5}`
 
 ### `GET /admin/queue/status`
-
-响应：
 
 ```json
 {
@@ -500,22 +516,23 @@ data: {"type":"message_stop"}
 }
 ```
 
-字段说明：
-
-- `max_inflight_per_account`：每个账号允许的并发 in-flight 请求上限（默认 `2`，可由环境变量覆盖）
-- `recommended_concurrency`：建议客户端并发值，按 `账号数量 × max_inflight_per_account` 动态计算
+| 字段 | 说明 |
+| --- | --- |
+| `available` | 当前可用账号数 |
+| `in_use` | 当前使用中的账号数 |
+| `total` | 总账号数 |
+| `max_inflight_per_account` | 每账号并发上限 |
+| `recommended_concurrency` | 建议并发值（`total × max_inflight_per_account`） |
 
 ### `POST /admin/accounts/test`
 
-请求字段：
-
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
-| `identifier` | 是 | email 或 mobile |
-| `model` | 否 | 默认 `deepseek-chat` |
-| `message` | 否 | 空字符串时仅测试建会话 |
+| `identifier` | ✅ | email 或 mobile |
+| `model` | ❌ | 默认 `deepseek-chat` |
+| `message` | ❌ | 空字符串时仅测试会话创建 |
 
-响应示例：
+**响应**：
 
 ```json
 {
@@ -529,33 +546,33 @@ data: {"type":"message_stop"}
 
 ### `POST /admin/accounts/test-all`
 
-请求可选：`model`
-
-响应示例：
+可选请求字段：`model`
 
 ```json
 {
   "total": 5,
   "success": 4,
   "failed": 1,
-  "results": []
+  "results": [...]
 }
 ```
 
 ### `POST /admin/import`
 
-请求支持同时导入 `keys` 与 `accounts`：
+批量导入 keys 与 accounts。
+
+**请求**：
 
 ```json
 {
   "keys": ["k1", "k2"],
   "accounts": [
-    {"email":"user@example.com","password":"pwd","token":""}
+    {"email": "user@example.com", "password": "pwd", "token": ""}
   ]
 }
 ```
 
-响应：
+**响应**：
 
 ```json
 {
@@ -567,35 +584,35 @@ data: {"type":"message_stop"}
 
 ### `POST /admin/test`
 
-请求字段（均可选）：
+测试当前 API 可用性（通过自身接口调用）。
 
-- `model`（默认 `deepseek-chat`）
-- `message`（默认 `你好`）
-- `api_key`（默认使用配置中第一个 key）
+| 字段 | 必填 | 默认值 |
+| --- | --- | --- |
+| `model` | ❌ | `deepseek-chat` |
+| `message` | ❌ | `你好` |
+| `api_key` | ❌ | 配置中第一个 key |
 
-响应示例：
+**响应**：
 
 ```json
 {
   "success": true,
   "status_code": 200,
-  "response": {"id":"..."}
+  "response": {"id": "..."}
 }
 ```
 
 ### `POST /admin/vercel/sync`
 
-请求字段：
-
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
-| `vercel_token` | 否 | 传空或 `__USE_PRECONFIG__` 则读环境变量 |
-| `project_id` | 否 | 为空则读 `VERCEL_PROJECT_ID` |
-| `team_id` | 否 | 为空则读 `VERCEL_TEAM_ID` |
-| `auto_validate` | 否 | 默认 `true` |
-| `save_credentials` | 否 | 默认 `true` |
+| `vercel_token` | ❌ | 空或 `__USE_PRECONFIG__` 则读环境变量 |
+| `project_id` | ❌ | 空则读 `VERCEL_PROJECT_ID` |
+| `team_id` | ❌ | 空则读 `VERCEL_TEAM_ID` |
+| `auto_validate` | ❌ | 默认 `true` |
+| `save_credentials` | ❌ | 默认 `true` |
 
-成功响应示例：
+**成功响应**：
 
 ```json
 {
@@ -606,7 +623,7 @@ data: {"type":"message_stop"}
 }
 ```
 
-或：
+或需要手动部署：
 
 ```json
 {
@@ -619,8 +636,6 @@ data: {"type":"message_stop"}
 
 ### `GET /admin/vercel/status`
 
-响应：
-
 ```json
 {
   "synced": true,
@@ -631,8 +646,6 @@ data: {"type":"message_stop"}
 
 ### `GET /admin/export`
 
-响应：
-
 ```json
 {
   "json": "{...}",
@@ -640,15 +653,29 @@ data: {"type":"message_stop"}
 }
 ```
 
+---
+
 ## 错误响应格式
 
-不同模块错误格式不完全一致（按当前实现）：
+不同模块的错误格式略有差异：
 
-- OpenAI 接口：`{"error":{"message":"...","type":"..."}}`
-- Claude 接口常见：`{"error":{"type":"...","message":"..."}}`
-- Admin 接口常见：`{"detail":"..."}`
+| 模块 | 格式 |
+| --- | --- |
+| OpenAI 接口 | `{"error": {"message": "...", "type": "..."}}` |
+| Claude 接口 | `{"error": {"type": "...", "message": "..."}}` |
+| Admin 接口 | `{"detail": "..."}` |
 
-建议客户端至少处理：HTTP 状态码 + `error` / `detail` 字段。
+建议客户端处理逻辑：检查 HTTP 状态码 + 解析 `error` 或 `detail` 字段。
+
+**常见状态码**：
+
+| 状态码 | 说明 |
+| --- | --- |
+| `401` | 鉴权失败（key/token 无效，或 Admin JWT 过期） |
+| `429` | 请求过多（超出并发上限 + 等待队列） |
+| `503` | 模型不可用或上游服务异常 |
+
+---
 
 ## cURL 示例
 
@@ -678,7 +705,48 @@ curl http://localhost:5001/v1/chat/completions \
   }'
 ```
 
-### Claude
+### OpenAI 带搜索
+
+```bash
+curl http://localhost:5001/v1/chat/completions \
+  -H "Authorization: Bearer your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-chat-search",
+    "messages": [{"role": "user", "content": "今天的新闻"}],
+    "stream": true
+  }'
+```
+
+### OpenAI Tool Calling
+
+```bash
+curl http://localhost:5001/v1/chat/completions \
+  -H "Authorization: Bearer your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-chat",
+    "messages": [{"role": "user", "content": "北京今天天气怎么样？"}],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_weather",
+          "description": "获取指定城市的天气",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {"type": "string", "description": "城市名"}
+            },
+            "required": ["city"]
+          }
+        }
+      }
+    ]
+  }'
+```
+
+### Claude 非流式
 
 ```bash
 curl http://localhost:5001/anthropic/v1/messages \
@@ -688,6 +756,42 @@ curl http://localhost:5001/anthropic/v1/messages \
   -d '{
     "model": "claude-sonnet-4-20250514",
     "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "你好"}]
+  }'
+```
+
+### Claude 流式
+
+```bash
+curl http://localhost:5001/anthropic/v1/messages \
+  -H "x-api-key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "claude-sonnet-4-20250514-slow",
+    "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "解释相对论"}],
+    "stream": true
+  }'
+```
+
+### Admin 登录
+
+```bash
+curl http://localhost:5001/admin/login \
+  -H "Content-Type: application/json" \
+  -d '{"admin_key": "admin"}'
+```
+
+### 指定账号请求
+
+```bash
+curl http://localhost:5001/v1/chat/completions \
+  -H "Authorization: Bearer your-api-key" \
+  -H "X-Ds2-Target-Account: user@example.com" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-chat",
     "messages": [{"role": "user", "content": "你好"}]
   }'
 ```

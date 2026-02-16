@@ -1,172 +1,328 @@
-# DS2API 部署指南（Go）
+# DS2API 部署指南
 
 语言 / Language: [中文](DEPLOY.md) | [English](DEPLOY.en.md)
 
-本指南基于当前 Go 代码库。
+本指南基于当前 Go 代码库，详细说明各种部署方式。
 
-## 部署方式
+---
 
-- 本地运行：`go run ./cmd/ds2api`
-- Docker：`docker-compose up -d`
-- Vercel：`api/index.go` serverless 入口
-- Linux 服务化：systemd
+## 目录
+
+- [前置要求](#0-前置要求)
+- [一、本地运行](#一本地运行)
+- [二、Docker 部署](#二docker-部署)
+- [三、Vercel 部署](#三vercel-部署)
+- [四、下载 Release 构建包](#四下载-release-构建包)
+- [五、反向代理（Nginx）](#五反向代理nginx)
+- [六、Linux systemd 服务化](#六linux-systemd-服务化)
+- [七、部署后检查](#七部署后检查)
+- [八、发布前进行本地回归](#八发布前进行本地回归)
+
+---
 
 ## 0. 前置要求
 
-- Go 1.24+
-- Node.js 20+（仅在需要本地构建 WebUI 时）
-- `config.json` 或 `DS2API_CONFIG_JSON`
+| 依赖 | 最低版本 | 说明 |
+| --- | --- | --- |
+| Go | 1.24+ | 编译后端 |
+| Node.js | 20+ | 仅在需要本地构建 WebUI 时 |
+| npm | 随 Node.js 提供 | 安装 WebUI 依赖 |
 
-## 1. 本地运行
+配置来源（任选其一）：
+
+- **文件方式**：`config.json`（推荐本地/Docker 使用）
+- **环境变量方式**：`DS2API_CONFIG_JSON`（推荐 Vercel 使用，支持 JSON 字符串或 Base64 编码）
+
+---
+
+## 一、本地运行
+
+### 1.1 基本步骤
 
 ```bash
+# 克隆仓库
 git clone https://github.com/CJackHwang/ds2api.git
 cd ds2api
 
+# 复制并编辑配置
 cp config.example.json config.json
-# 编辑 config.json
+# 使用你喜欢的编辑器打开 config.json，填入：
+#   - keys: 你的 API 访问密钥
+#   - accounts: DeepSeek 账号（email 或 mobile + password）
 
+# 启动服务
 go run ./cmd/ds2api
 ```
 
-默认监听 `5001`，可通过 `PORT` 覆盖。
+默认监听 `http://0.0.0.0:5001`，可通过 `PORT` 环境变量覆盖。
 
-构建 WebUI（可选，仅当 `/admin` 缺少静态文件时）：
+### 1.2 WebUI 构建
+
+本地首次启动时，若 `static/admin/` 不存在，服务会自动尝试构建 WebUI（需要 Node.js/npm）。
+
+你也可以手动构建：
 
 ```bash
 ./scripts/build-webui.sh
-
-# 或依赖自动构建（默认本地开启）
-# DS2API_AUTO_BUILD_WEBUI=true go run ./cmd/ds2api
 ```
 
-## 2. Docker 部署
+或手动执行：
 
 ```bash
-cp .env.example .env
-# 编辑 .env
+cd webui
+npm install
+npm run build
+# 产物输出到 static/admin/
+```
 
+通过环境变量控制自动构建行为：
+
+```bash
+# 强制关闭自动构建
+DS2API_AUTO_BUILD_WEBUI=false go run ./cmd/ds2api
+
+# 强制开启自动构建
+DS2API_AUTO_BUILD_WEBUI=true go run ./cmd/ds2api
+```
+
+### 1.3 编译为二进制文件
+
+```bash
+go build -o ds2api ./cmd/ds2api
+./ds2api
+```
+
+---
+
+## 二、Docker 部署
+
+### 2.1 基本步骤
+
+```bash
+# 复制并编辑环境变量
+cp .env.example .env
+# 编辑 .env，至少设置：
+#   DS2API_ADMIN_KEY=your-admin-key
+#   DS2API_CONFIG_JSON={"keys":[...],"accounts":[...]}
+
+# 启动
 docker-compose up -d
+
+# 查看日志
 docker-compose logs -f
 ```
 
-更新镜像：
+### 2.2 更新
 
 ```bash
 docker-compose up -d --build
 ```
 
-说明：
+### 2.3 Docker 架构说明
 
-- `Dockerfile` 使用多阶段构建（WebUI + Go 二进制）
-- 容器内默认启动命令：`/usr/local/bin/ds2api`
+`Dockerfile` 使用三阶段构建：
 
-## 3. Vercel 部署
+1. **WebUI 构建阶段**：`node:20` 镜像，执行 `npm ci && npm run build`
+2. **Go 构建阶段**：`golang:1.24` 镜像，编译二进制文件
+3. **运行阶段**：`debian:bookworm-slim` 精简镜像
 
-- serverless 入口：`api/index.go`
-- 路由与缓存头：`vercel.json`
-- 构建阶段会自动执行 `npm ci --prefix webui && npm run build --prefix webui`
-- `vercel.json` 已将 `/admin/assets/*` 与 `/admin` 页面走静态产物，`/admin/*` API 仍走 `api/index`
-- 为缓解 Go Runtime 的流式缓冲，`/v1/chat/completions` 在 Vercel 上会优先走 `api/chat-stream.js`（Node Runtime）
-- `api/chat-stream.js` 对非流式请求或 `tools` 请求会自动回退到 Go 入口（内部 `__go=1`）
-- `api/chat-stream.js` 仅负责流式数据转发与 SSE 转换；鉴权、账号选择、会话创建、PoW 计算仍由 Go 内部 prepare 接口完成（仅 Vercel 启用）
-- Go prepare 会创建流式 lease，Node 在流结束后回调 release；账号占用语义与 Go 原生流式保持一致
-- `vercel.json` 已将 `api/chat-stream.js` 与 `api/index.go` 的 `maxDuration` 设为 `300`（受套餐上限约束）
+容器内启动命令：`/usr/local/bin/ds2api`，默认暴露端口 `5001`。
 
-至少配置环境变量：
+### 2.4 开发环境
 
-- `DS2API_ADMIN_KEY`
-- `DS2API_CONFIG_JSON`（JSON 或 Base64）
-
-可选：
-
-- `VERCEL_TOKEN`
-- `VERCEL_PROJECT_ID`
-- `VERCEL_TEAM_ID`
-- `DS2API_ACCOUNT_MAX_INFLIGHT`（每账号并发上限，默认 `2`）
-- `DS2API_ACCOUNT_CONCURRENCY`（同上别名）
-- `DS2API_ACCOUNT_MAX_QUEUE`（等待队列上限，默认=`recommended_concurrency`）
-- `DS2API_ACCOUNT_QUEUE_SIZE`（同上别名）
-- `DS2API_VERCEL_INTERNAL_SECRET`（可选，Vercel 混合流式链路内部鉴权；未设置时回退使用 `DS2API_ADMIN_KEY`）
-- `DS2API_VERCEL_STREAM_LEASE_TTL_SECONDS`（可选，流式 lease 过期秒数，默认 `900`）
-
-并发建议值会动态按 `账号数量 × 每账号并发上限` 计算（默认即 `账号数量 × 2`）。
-当 in-flight 满时，请求先进入等待队列；默认队列上限等于建议并发值，因此默认 429 阈值约为 `账号数量 × 4`。
-
-说明：
-- 仓库不提交 `static/admin` 构建产物
-- Vercel / Docker 构建阶段自动生成 WebUI 静态文件
-
-部署后建议先访问：
-
-- `/healthz`
-- `/v1/models`
-- `/admin`
-
-## 3.1 GitHub Release 自动构建
-
-仓库包含 `.github/workflows/release-artifacts.yml`：
-
-- 仅在 Release `published` 时触发
-- 不在 `push` 时触发
-- 自动构建 Linux/macOS/Windows 二进制包并上传到 Release Assets
-- 生成 `sha256sums.txt` 供校验
-
-## 3.2 Vercel 常见报错排查
-
-若看到类似报错：
-
-```text
-Error: Command failed: go build -ldflags -s -w -o .../bootstrap .../main__vc__go__.go
+```bash
+docker-compose -f docker-compose.dev.yml up
 ```
 
-通常是 Vercel 项目里的 Go 构建参数配置不正确（`-ldflags` 没有作为一个整体字符串传递）。
+开发模式特性：
+- 源代码挂载（修改即生效）
+- `LOG_LEVEL=DEBUG`
+- 不自动重启
 
-处理方式：
+### 2.5 健康检查
 
-1. 进入 Vercel Project Settings -> Build and Development Settings
-2. 清空自定义 Go Build Flags / Build Command（推荐）
-3. 若必须设置 ldflags，使用 `-ldflags=\"-s -w\"`（保证它是一个参数）
+Docker Compose 已配置内置健康检查：
+
+```yaml
+healthcheck:
+  test: ["CMD", "wget", "-qO-", "http://localhost:5001/healthz"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 10s
+```
+
+---
+
+## 三、Vercel 部署
+
+### 3.1 部署步骤
+
+1. **Fork 仓库**到你的 GitHub 账号
+2. **在 Vercel 上导入项目**
+3. **配置环境变量**（至少设置以下两项）：
+
+   | 变量 | 说明 |
+   | --- | --- |
+   | `DS2API_ADMIN_KEY` | 管理密钥（必填） |
+   | `DS2API_CONFIG_JSON` | 配置内容，JSON 字符串或 Base64 编码（必填） |
+
+4. **部署**
+
+### 3.2 可选环境变量
+
+| 变量 | 说明 | 默认值 |
+| --- | --- | --- |
+| `DS2API_ACCOUNT_MAX_INFLIGHT` | 每账号并发上限 | `2` |
+| `DS2API_ACCOUNT_CONCURRENCY` | 同上（兼容别名） | — |
+| `DS2API_ACCOUNT_MAX_QUEUE` | 等待队列上限 | `recommended_concurrency` |
+| `DS2API_ACCOUNT_QUEUE_SIZE` | 同上（兼容别名） | — |
+| `DS2API_VERCEL_INTERNAL_SECRET` | 混合流式内部鉴权 | 回退用 `DS2API_ADMIN_KEY` |
+| `DS2API_VERCEL_STREAM_LEASE_TTL_SECONDS` | 流式 lease TTL | `900` |
+| `VERCEL_TOKEN` | Vercel 同步 token | — |
+| `VERCEL_PROJECT_ID` | Vercel 项目 ID | — |
+| `VERCEL_TEAM_ID` | Vercel 团队 ID | — |
+
+### 3.3 Vercel 架构说明
+
+```text
+请求 ─────┐
+          │
+          ▼
+     vercel.json 路由规则
+          │
+    ┌─────┴─────┐
+    │           │
+    ▼           ▼
+api/index.go  api/chat-stream.js
+(Go Runtime)  (Node Runtime)
+```
+
+- **入口文件**：`api/index.go`（Serverless Go）
+- **流式入口**：`api/chat-stream.js`（Node Runtime，保证实时 SSE）
+- **路由重写**：`vercel.json`
+- **构建命令**：`npm ci --prefix webui && npm run build --prefix webui`（自动执行）
+
+#### 流式处理链路
+
+由于 Vercel Go Runtime 存在平台层响应缓冲，本项目在 Vercel 上采用"**Go prepare + Node stream**"的混合链路：
+
+1. `api/chat-stream.js` 收到 `/v1/chat/completions` 请求
+2. Node 调用 Go 内部 prepare 接口（`?__stream_prepare=1`），获取会话 ID、PoW、token 等
+3. Go prepare 创建 stream lease，锁定账号
+4. Node 直连 DeepSeek 上游，实时流式转发 SSE 给客户端
+5. 流结束后 Node 调用 Go release 接口（`?__stream_release=1`），释放账号
+
+> 该适配**仅在 Vercel 环境生效**；本地与 Docker 仍走纯 Go 链路。
+
+#### 非流式与 Tool Call 回退
+
+- `api/chat-stream.js` 对非流式请求或带 `tools` 的请求会自动回退到 Go 入口（`?__go=1`）
+- WebUI 的"非流式测试"直接请求 `?__go=1`，避免 Node 中转造成长请求超时
+
+#### 函数时长
+
+`vercel.json` 已将 `api/chat-stream.js` 与 `api/index.go` 的 `maxDuration` 设为 `300`（受 Vercel 套餐上限约束）。
+
+### 3.4 Vercel 常见报错排查
+
+#### Go 构建失败
+
+```text
+Error: Command failed: go build -ldflags -s -w -o .../bootstrap ...
+```
+
+**原因**：Vercel 项目的 Go 构建参数配置不正确（`-ldflags` 没有作为一个整体字符串传递）。
+
+**解决**：
+
+1. 进入 Vercel Project Settings → Build and Development Settings
+2. **清空**自定义 Go Build Flags / Build Command（推荐）
+3. 若必须设置 ldflags，使用 `-ldflags="-s -w"`（保证它是一个参数）
 4. 确认仓库 `go.mod` 为受支持版本（当前为 `go 1.24`）
-5. 重新部署（建议 `Redeploy` 并清缓存）
+5. 重新部署（建议清缓存后 Redeploy）
 
-另一个常见根因（Go 单仓 + `internal/`）：
+#### Internal 包导入错误
 
 ```text
-... use of internal package ds2api/internal/server not allowed
+use of internal package ds2api/internal/server not allowed
 ```
 
-这通常发生在 Vercel Go 入口文件直接 `import internal/...`。
-当前仓库已通过公开桥接包 `app` 解决：`api/index.go` -> `ds2api/app` -> `internal/server`。
+**原因**：Vercel Go 入口文件直接 `import internal/...`。
 
-若看到类似报错：
+**解决**：当前仓库已通过公开桥接包 `app` 解决：`api/index.go` → `ds2api/app` → `internal/server`。
+
+#### 输出目录错误
 
 ```text
 No Output Directory named "public" found after the Build completed.
 ```
 
-说明 Vercel 正在按 `public` 校验前端产物目录。当前仓库会将 WebUI 构建到 `static/admin`，并在 `vercel.json` 使用上级目录 `static` 作为输出根目录：
+**解决**：当前仓库使用 `static` 作为输出目录（`vercel.json` 中 `"outputDirectory": "static"`）。若你在项目设置里手动改过 Output Directory，请设为 `static` 或清空让仓库配置生效。
 
-```json
-"outputDirectory": "static"
+#### 部署保护拦截
+
+如果接口返回 Vercel HTML 页面 `Authentication Required`：
+
+- **方案 A**：关闭该部署/环境的 Deployment Protection（推荐用于公开 API）
+- **方案 B**：请求中添加 `x-vercel-protection-bypass` 头
+- **方案 C**：设置 `VERCEL_AUTOMATION_BYPASS_SECRET`（或 `DS2API_VERCEL_PROTECTION_BYPASS`），仅影响内部 Node→Go 调用
+
+### 3.5 仓库不提交构建产物
+
+- `static/admin` 目录不在 Git 中
+- Vercel / Docker 构建阶段自动生成 WebUI 静态文件
+
+---
+
+## 四、下载 Release 构建包
+
+仓库内置 GitHub Actions 工作流：`.github/workflows/release-artifacts.yml`
+
+- **触发条件**：仅在 Release `published` 时触发（普通 push 不会构建）
+- **构建产物**：多平台二进制压缩包 + `sha256sums.txt`
+
+| 平台 | 架构 | 文件格式 |
+| --- | --- | --- |
+| Linux | amd64, arm64 | `.tar.gz` |
+| macOS | amd64, arm64 | `.tar.gz` |
+| Windows | amd64 | `.zip` |
+
+每个压缩包包含：
+
+- `ds2api` 可执行文件（Windows 为 `ds2api.exe`）
+- `static/admin/`（WebUI 构建产物）
+- `sha3_wasm_bg.7b9ca65ddd.wasm`
+- `config.example.json`、`.env.example`
+- `README.MD`、`README.en.md`、`LICENSE`
+
+### 使用步骤
+
+```bash
+# 1. 下载对应平台的压缩包
+# 2. 解压
+tar -xzf ds2api_v1.7.0_linux_amd64.tar.gz
+cd ds2api_v1.7.0_linux_amd64
+
+# 3. 配置
+cp config.example.json config.json
+# 编辑 config.json
+
+# 4. 启动
+./ds2api
 ```
 
-若你在项目设置里手动改过 Output Directory，请同步改为 `static` 或清空让仓库配置生效。
+### 维护者发布步骤
 
-若接口返回 Vercel 的 HTML 页面 `Authentication Required`（而不是 JSON），说明被 Vercel Deployment Protection 拦截：
+1. 在 GitHub 创建并发布 Release（带 tag，如 `v1.7.0`）
+2. 等待 Actions 工作流 `Release Artifacts` 完成
+3. 在 Release 的 Assets 下载对应平台压缩包
 
-- 关闭该部署/环境的 Protection（推荐用于公开 API）
-- 或给请求加 `x-vercel-protection-bypass`
-- 若仅是 Vercel 内部 Node->Go 调用被拦截，可设置 `VERCEL_AUTOMATION_BYPASS_SECRET`（或 `DS2API_VERCEL_PROTECTION_BYPASS`）
+---
 
-Vercel 流式说明（重要）：
+## 五、反向代理（Nginx）
 
-- Vercel 的 Go Runtime 存在平台层响应缓冲，因此本项目在 Vercel 上采用“Go prepare + Node stream”的混合链路来恢复实时 SSE。
-- 该适配只在 Vercel 生效；本地与 Docker 仍走纯 Go 链路。
-
-## 4. 反向代理（Nginx）
-
-如果在 Nginx 后挂载，建议关闭缓冲以保证 SSE：
+如果在 Nginx 后部署，**必须关闭缓冲**以保证 SSE 流式响应正常工作：
 
 ```nginx
 location / {
@@ -180,9 +336,50 @@ location / {
 }
 ```
 
-## 5. systemd 示例（Linux）
+如果需要 HTTPS，可以在 Nginx 层配置 SSL 证书：
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name api.example.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:5001;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+        proxy_cache off;
+        chunked_transfer_encoding on;
+        tcp_nodelay on;
+    }
+}
+```
+
+---
+
+## 六、Linux systemd 服务化
+
+### 6.1 安装
+
+```bash
+# 将编译好的二进制文件和相关文件复制到目标目录
+sudo mkdir -p /opt/ds2api
+sudo cp ds2api config.json sha3_wasm_bg.7b9ca65ddd.wasm /opt/ds2api/
+sudo cp -r static/admin /opt/ds2api/static/admin
+```
+
+### 6.2 创建 systemd 服务文件
 
 ```ini
+# /etc/systemd/system/ds2api.service
+
 [Unit]
 Description=DS2API (Go)
 After=network.target
@@ -192,7 +389,7 @@ Type=simple
 WorkingDirectory=/opt/ds2api
 Environment=PORT=5001
 Environment=DS2API_CONFIG_PATH=/opt/ds2api/config.json
-Environment=DS2API_ADMIN_KEY=admin
+Environment=DS2API_ADMIN_KEY=your-admin-key-here
 ExecStart=/opt/ds2api/ds2api
 Restart=always
 RestartSec=5
@@ -201,38 +398,72 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-常用命令：
+### 6.3 常用命令
 
 ```bash
+# 加载服务配置
 sudo systemctl daemon-reload
+
+# 设置开机自启
 sudo systemctl enable ds2api
+
+# 启动服务
 sudo systemctl start ds2api
+
+# 查看状态
 sudo systemctl status ds2api
+
+# 查看日志
+sudo journalctl -u ds2api -f
+
+# 重启服务
+sudo systemctl restart ds2api
+
+# 停止服务
+sudo systemctl stop ds2api
 ```
 
-## 6. 部署后检查
+---
+
+## 七、部署后检查
+
+无论使用哪种部署方式，启动后建议依次检查：
 
 ```bash
+# 1. 存活探针
 curl -s http://127.0.0.1:5001/healthz
+# 预期: {"status":"ok"}
+
+# 2. 就绪探针
 curl -s http://127.0.0.1:5001/readyz
+# 预期: {"status":"ready"}
+
+# 3. 模型列表
 curl -s http://127.0.0.1:5001/v1/models
+# 预期: {"object":"list","data":[...]}
+
+# 4. 管理台页面（如果已构建 WebUI）
+curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5001/admin
+# 预期: 200
+
+# 5. 测试 API 调用
+curl http://127.0.0.1:5001/v1/chat/completions \
+  -H "Authorization: Bearer your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"deepseek-chat","messages":[{"role":"user","content":"hello"}]}'
 ```
 
-如果你依赖管理台接口，再检查：
+---
 
-```bash
-curl -s http://127.0.0.1:5001/admin
-```
+## 八、发布前进行本地回归
 
-## 7. 发布前本地回归（推荐）
-
-建议在发布前执行一次完整测试集（真实账号链路）：
+建议在发布前执行完整的端到端测试集（使用真实账号）：
 
 ```bash
 ./scripts/testsuite/run-live.sh
 ```
 
-可选参数示例：
+可自定义参数：
 
 ```bash
 go run ./cmd/ds2api-tests \
@@ -243,9 +474,11 @@ go run ./cmd/ds2api-tests \
   --retries 2
 ```
 
-测试集会自动执行：
+测试集自动执行内容：
 
-- 语法/构建/单测 preflight
-- 隔离副本配置启动服务（不污染原始 `config.json`）
-- 真实调用场景验证（OpenAI/Claude/Admin/并发/toolcall/流式）
-- 全量请求与响应日志落盘（用于故障复盘）
+- ✅ 语法/构建/单测 preflight
+- ✅ 隔离副本配置启动服务（不污染原始 `config.json`）
+- ✅ 真实调用场景验证（OpenAI/Claude/Admin/并发/toolcall/流式）
+- ✅ 全量请求与响应日志落盘（用于故障复盘）
+
+详细测试集说明参阅 [TESTING.md](TESTING.md)。

@@ -1,174 +1,328 @@
-# DS2API Deployment Guide (Go)
+# DS2API Deployment Guide
 
 Language: [中文](DEPLOY.md) | [English](DEPLOY.en.md)
 
-This guide is aligned with the current Go codebase.
+This guide covers all deployment methods for the current Go-based codebase.
 
-## Deployment Modes
+---
 
-- Local run: `go run ./cmd/ds2api`
-- Docker: `docker-compose up -d`
-- Vercel: serverless entry at `api/index.go`
-- Linux service mode: systemd
+## Table of Contents
+
+- [Prerequisites](#0-prerequisites)
+- [1. Local Run](#1-local-run)
+- [2. Docker Deployment](#2-docker-deployment)
+- [3. Vercel Deployment](#3-vercel-deployment)
+- [4. Download Release Binaries](#4-download-release-binaries)
+- [5. Reverse Proxy (Nginx)](#5-reverse-proxy-nginx)
+- [6. Linux systemd Service](#6-linux-systemd-service)
+- [7. Post-Deploy Checks](#7-post-deploy-checks)
+- [8. Pre-Release Local Regression](#8-pre-release-local-regression)
+
+---
 
 ## 0. Prerequisites
 
-- Go 1.24+
-- Node.js 20+ (only if you need to build WebUI locally)
-- `config.json` or `DS2API_CONFIG_JSON`
+| Dependency | Minimum Version | Notes |
+| --- | --- | --- |
+| Go | 1.24+ | Build backend |
+| Node.js | 20+ | Only needed to build WebUI locally |
+| npm | Bundled with Node.js | Install WebUI dependencies |
+
+Config source (choose one):
+
+- **File**: `config.json` (recommended for local/Docker)
+- **Environment variable**: `DS2API_CONFIG_JSON` (recommended for Vercel; supports raw JSON or Base64)
+
+---
 
 ## 1. Local Run
 
+### 1.1 Basic Steps
+
 ```bash
+# Clone
 git clone https://github.com/CJackHwang/ds2api.git
 cd ds2api
 
+# Copy and edit config
 cp config.example.json config.json
-# edit config.json
+# Open config.json and fill in:
+#   - keys: your API access keys
+#   - accounts: DeepSeek accounts (email or mobile + password)
 
+# Start
 go run ./cmd/ds2api
 ```
 
-Default port is `5001` (override with `PORT`).
+Default address: `http://0.0.0.0:5001` (override with `PORT`).
 
-Build WebUI if `/admin` reports missing assets:
+### 1.2 WebUI Build
+
+On first local startup, if `static/admin/` is missing, DS2API will automatically attempt to build the WebUI (requires Node.js/npm).
+
+Manual build:
 
 ```bash
 ./scripts/build-webui.sh
-
-# Or rely on startup auto-build (enabled locally by default)
-# DS2API_AUTO_BUILD_WEBUI=true go run ./cmd/ds2api
 ```
+
+Or step by step:
+
+```bash
+cd webui
+npm install
+npm run build
+# Output goes to static/admin/
+```
+
+Control auto-build via environment variable:
+
+```bash
+# Disable auto-build
+DS2API_AUTO_BUILD_WEBUI=false go run ./cmd/ds2api
+
+# Force enable auto-build
+DS2API_AUTO_BUILD_WEBUI=true go run ./cmd/ds2api
+```
+
+### 1.3 Compile to Binary
+
+```bash
+go build -o ds2api ./cmd/ds2api
+./ds2api
+```
+
+---
 
 ## 2. Docker Deployment
 
-```bash
-cp .env.example .env
-# edit .env
+### 2.1 Basic Steps
 
+```bash
+# Copy and edit environment
+cp .env.example .env
+# Edit .env, at minimum set:
+#   DS2API_ADMIN_KEY=your-admin-key
+#   DS2API_CONFIG_JSON={"keys":[...],"accounts":[...]}
+
+# Start
 docker-compose up -d
+
+# View logs
 docker-compose logs -f
 ```
 
-Rebuild after updates:
+### 2.2 Update
 
 ```bash
 docker-compose up -d --build
 ```
 
-Notes:
+### 2.3 Docker Architecture
 
-- `Dockerfile` uses multi-stage build (WebUI + Go binary)
-- Container entry command is `/usr/local/bin/ds2api`
+The `Dockerfile` uses a three-stage build:
+
+1. **WebUI build stage**: `node:20` image, runs `npm ci && npm run build`
+2. **Go build stage**: `golang:1.24` image, compiles the binary
+3. **Runtime stage**: `debian:bookworm-slim` minimal image
+
+Container entry command: `/usr/local/bin/ds2api`, default exposed port: `5001`.
+
+### 2.4 Development Mode
+
+```bash
+docker-compose -f docker-compose.dev.yml up
+```
+
+Development features:
+- Source code mounted (live changes)
+- `LOG_LEVEL=DEBUG`
+- No auto-restart
+
+### 2.5 Health Check
+
+Docker Compose includes a built-in health check:
+
+```yaml
+healthcheck:
+  test: ["CMD", "wget", "-qO-", "http://localhost:5001/healthz"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 10s
+```
+
+---
 
 ## 3. Vercel Deployment
 
-- Serverless entry: `api/index.go`
-- Rewrites and cache headers: `vercel.json`
-- Build stage runs `npm ci --prefix webui && npm run build --prefix webui` automatically
-- `vercel.json` routes `/admin/assets/*` and the `/admin` page to static output, while `/admin/*` APIs still go to `api/index`
-- To mitigate Go Runtime streaming buffering, `/v1/chat/completions` on Vercel is routed to `api/chat-stream.js` (Node Runtime)
-- `api/chat-stream.js` automatically falls back to the Go entry for non-stream requests or requests with `tools` (internal `__go=1`)
-- `api/chat-stream.js` is data-path only (stream relay + SSE conversion); auth/account/session/PoW preparation still comes from an internal Go prepare endpoint (enabled on Vercel only)
-- Go prepare creates a stream lease and Node releases it when streaming ends, keeping account occupancy semantics aligned with native Go streaming
-- `vercel.json` sets `maxDuration: 300` for both `api/chat-stream.js` and `api/index.go` (subject to your Vercel plan limits)
+### 3.1 Steps
 
-Minimum environment variables:
+1. **Fork** the repo to your GitHub account
+2. **Import** the project on Vercel
+3. **Set environment variables** (at minimum):
 
-- `DS2API_ADMIN_KEY`
-- `DS2API_CONFIG_JSON` (raw JSON or Base64)
+   | Variable | Description |
+   | --- | --- |
+   | `DS2API_ADMIN_KEY` | Admin key (required) |
+   | `DS2API_CONFIG_JSON` | Config content, raw JSON or Base64 (required) |
 
-Optional:
+4. **Deploy**
 
-- `VERCEL_TOKEN`
-- `VERCEL_PROJECT_ID`
-- `VERCEL_TEAM_ID`
-- `DS2API_ACCOUNT_MAX_INFLIGHT` (per-account inflight limit, default `2`)
-- `DS2API_ACCOUNT_CONCURRENCY` (alias of the same setting)
-- `DS2API_ACCOUNT_MAX_QUEUE` (waiting queue limit, default=`recommended_concurrency`)
-- `DS2API_ACCOUNT_QUEUE_SIZE` (alias of the same setting)
-- `DS2API_VERCEL_INTERNAL_SECRET` (optional internal auth secret for Vercel hybrid streaming path; falls back to `DS2API_ADMIN_KEY` when unset)
-- `DS2API_VERCEL_STREAM_LEASE_TTL_SECONDS` (optional stream lease TTL in seconds, default `900`)
+### 3.2 Optional Environment Variables
 
-Recommended concurrency is computed dynamically as `account_count * per_account_inflight_limit` (default is `account_count * 2`).
-When inflight slots are full, requests are queued first; with default queue size, 429 typically starts around `account_count * 4`.
+| Variable | Description | Default |
+| --- | --- | --- |
+| `DS2API_ACCOUNT_MAX_INFLIGHT` | Per-account inflight limit | `2` |
+| `DS2API_ACCOUNT_CONCURRENCY` | Alias (legacy compat) | — |
+| `DS2API_ACCOUNT_MAX_QUEUE` | Waiting queue limit | `recommended_concurrency` |
+| `DS2API_ACCOUNT_QUEUE_SIZE` | Alias (legacy compat) | — |
+| `DS2API_VERCEL_INTERNAL_SECRET` | Hybrid streaming internal auth | Falls back to `DS2API_ADMIN_KEY` |
+| `DS2API_VERCEL_STREAM_LEASE_TTL_SECONDS` | Stream lease TTL | `900` |
+| `VERCEL_TOKEN` | Vercel sync token | — |
+| `VERCEL_PROJECT_ID` | Vercel project ID | — |
+| `VERCEL_TEAM_ID` | Vercel team ID | — |
 
-Notes:
-- `static/admin` build output is not committed
-- Vercel/Docker generate WebUI assets during build
-
-After deploy, verify:
-
-- `/healthz`
-- `/v1/models`
-- `/admin`
-
-## 3.1 GitHub Release Automation
-
-This repo includes `.github/workflows/release-artifacts.yml`:
-
-- Triggers only on Release `published`
-- Does not run on `push`
-- Builds Linux/macOS/Windows archives and uploads them to Release Assets
-- Generates `sha256sums.txt` for integrity checks
-
-## 3.2 Vercel Build Troubleshooting
-
-If you see an error like:
+### 3.3 Vercel Architecture
 
 ```text
-Error: Command failed: go build -ldflags -s -w -o .../bootstrap .../main__vc__go__.go
+Request ──────┐
+              │
+              ▼
+         vercel.json routing
+              │
+        ┌─────┴─────┐
+        │           │
+        ▼           ▼
+  api/index.go   api/chat-stream.js
+  (Go Runtime)   (Node Runtime)
 ```
 
-it is usually caused by invalid Go build flag settings in Vercel
-(`-ldflags` not passed as a single argument).
+- **Go entry**: `api/index.go` (Serverless Go)
+- **Stream entry**: `api/chat-stream.js` (Node Runtime for real-time SSE)
+- **Routing**: `vercel.json`
+- **Build command**: `npm ci --prefix webui && npm run build --prefix webui` (automatic)
 
-How to fix:
+#### Streaming Pipeline
 
-1. Open Vercel Project Settings -> Build and Development Settings
-2. Clear custom Go Build Flags / Build Command (recommended)
-3. If ldflags must be used, set `-ldflags=\"-s -w\"` so it is passed as one argument
-4. Ensure `go.mod` uses a supported version (this repo uses `go 1.24`)
-5. Redeploy (preferably with cache cleared)
+Vercel Go Runtime applies platform-level response buffering, so this project uses a hybrid "**Go prepare + Node stream**" path on Vercel:
 
-Another common root cause (Go monorepo + `internal/`):
+1. `api/chat-stream.js` receives `/v1/chat/completions` request
+2. Node calls Go internal prepare endpoint (`?__stream_prepare=1`) for session ID, PoW, token
+3. Go prepare creates a stream lease, locking the account
+4. Node connects directly to DeepSeek upstream, relays SSE in real-time to client
+5. After stream ends, Node calls Go release endpoint (`?__stream_release=1`) to free the account
+
+> This adaptation is **Vercel-only**; local and Docker remain pure Go.
+
+#### Non-Stream and Tool Call Fallback
+
+- `api/chat-stream.js` automatically falls back to Go entry (`?__go=1`) for non-stream requests or requests with `tools`
+- WebUI non-stream test calls `?__go=1` directly to avoid Node hop timeout on long requests
+
+#### Function Duration
+
+`vercel.json` sets `maxDuration: 300` for both `api/chat-stream.js` and `api/index.go` (subject to your Vercel plan limits).
+
+### 3.4 Vercel Troubleshooting
+
+#### Go Build Failure
 
 ```text
-... use of internal package ds2api/internal/server not allowed
+Error: Command failed: go build -ldflags -s -w -o .../bootstrap ...
 ```
 
-This usually happens when the Vercel Go entrypoint imports `internal/...` directly.
-This repo now avoids that by using a public bridge package: `api/index.go` -> `ds2api/app` -> `internal/server`.
+**Cause**: Invalid Go build flag settings in Vercel (`-ldflags` not passed as a single argument).
 
-If you see:
+**Fix**:
+
+1. Open Vercel Project Settings → Build and Development Settings
+2. **Clear** custom Go Build Flags / Build Command (recommended)
+3. If ldflags must be used, set `-ldflags="-s -w"` (ensure it's one argument)
+4. Verify `go.mod` uses a supported version (currently `go 1.24`)
+5. Redeploy (recommended: clear cache)
+
+#### Internal Package Import Error
+
+```text
+use of internal package ds2api/internal/server not allowed
+```
+
+**Cause**: Vercel Go entrypoint directly imports `internal/...`.
+
+**Fix**: This repo uses a public bridge package: `api/index.go` → `ds2api/app` → `internal/server`.
+
+#### Output Directory Error
 
 ```text
 No Output Directory named "public" found after the Build completed.
 ```
 
-Vercel is validating frontend output against `public`. This repo builds WebUI into `static/admin`, and uses the parent directory `static` as Vercel output root.
-`vercel.json` now explicitly sets:
+**Fix**: This repo uses `static` as output directory (`"outputDirectory": "static"` in `vercel.json`). If you manually changed Output Directory in Project Settings, set it to `static` or clear it.
 
-```json
-"outputDirectory": "static"
+#### Deployment Protection Blocking
+
+If API responses return Vercel HTML `Authentication Required`:
+
+- **Option A**: Disable Deployment Protection for that environment (recommended for public APIs)
+- **Option B**: Add `x-vercel-protection-bypass` header to requests
+- **Option C**: Set `VERCEL_AUTOMATION_BYPASS_SECRET` (or `DS2API_VERCEL_PROTECTION_BYPASS`) for internal Node→Go calls
+
+### 3.5 Build Artifacts Not Committed
+
+- `static/admin` directory is not in Git
+- Vercel / Docker automatically generate WebUI assets during build
+
+---
+
+## 4. Download Release Binaries
+
+Built-in GitHub Actions workflow: `.github/workflows/release-artifacts.yml`
+
+- **Trigger**: only on Release `published` (no build on normal push)
+- **Outputs**: multi-platform binary archives + `sha256sums.txt`
+
+| Platform | Architecture | Format |
+| --- | --- | --- |
+| Linux | amd64, arm64 | `.tar.gz` |
+| macOS | amd64, arm64 | `.tar.gz` |
+| Windows | amd64 | `.zip` |
+
+Each archive includes:
+
+- `ds2api` executable (`ds2api.exe` on Windows)
+- `static/admin/` (built WebUI assets)
+- `sha3_wasm_bg.7b9ca65ddd.wasm`
+- `config.example.json`, `.env.example`
+- `README.MD`, `README.en.md`, `LICENSE`
+
+### Usage
+
+```bash
+# 1. Download the archive for your platform
+# 2. Extract
+tar -xzf ds2api_v1.7.0_linux_amd64.tar.gz
+cd ds2api_v1.7.0_linux_amd64
+
+# 3. Configure
+cp config.example.json config.json
+# Edit config.json
+
+# 4. Start
+./ds2api
 ```
 
-If you manually changed Output Directory in Project Settings, set it to `static` (or clear it and let repo config apply).
+### Maintainer Release Flow
 
-If API responses return Vercel HTML `Authentication Required` (instead of JSON), the request is blocked by Vercel Deployment Protection:
+1. Create and publish a GitHub Release (with tag, e.g. `v1.7.0`)
+2. Wait for the `Release Artifacts` workflow to complete
+3. Download the matching archive from Release Assets
 
-- Disable protection for that deployment/environment (recommended for public API use)
-- Or send `x-vercel-protection-bypass` in requests
-- If only internal Node->Go calls are blocked, set `VERCEL_AUTOMATION_BYPASS_SECRET` (or `DS2API_VERCEL_PROTECTION_BYPASS`)
+---
 
-Vercel streaming note (important):
+## 5. Reverse Proxy (Nginx)
 
-- Vercel Go Runtime applies platform-level buffering, so this repo uses a hybrid path on Vercel (`Go prepare + Node stream`) to restore real-time SSE behavior.
-- This adaptation is Vercel-only; local and Docker remain pure Go.
-
-## 4. Reverse Proxy (Nginx)
-
-Disable buffering for SSE:
+When deploying behind Nginx, **you must disable buffering** for SSE streaming to work:
 
 ```nginx
 location / {
@@ -182,9 +336,50 @@ location / {
 }
 ```
 
-## 5. systemd Example (Linux)
+For HTTPS, add SSL at the Nginx layer:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name api.example.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:5001;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+        proxy_cache off;
+        chunked_transfer_encoding on;
+        tcp_nodelay on;
+    }
+}
+```
+
+---
+
+## 6. Linux systemd Service
+
+### 6.1 Installation
+
+```bash
+# Copy compiled binary and related files to target directory
+sudo mkdir -p /opt/ds2api
+sudo cp ds2api config.json sha3_wasm_bg.7b9ca65ddd.wasm /opt/ds2api/
+sudo cp -r static/admin /opt/ds2api/static/admin
+```
+
+### 6.2 Create systemd Service File
 
 ```ini
+# /etc/systemd/system/ds2api.service
+
 [Unit]
 Description=DS2API (Go)
 After=network.target
@@ -194,7 +389,7 @@ Type=simple
 WorkingDirectory=/opt/ds2api
 Environment=PORT=5001
 Environment=DS2API_CONFIG_PATH=/opt/ds2api/config.json
-Environment=DS2API_ADMIN_KEY=admin
+Environment=DS2API_ADMIN_KEY=your-admin-key-here
 ExecStart=/opt/ds2api/ds2api
 Restart=always
 RestartSec=5
@@ -203,38 +398,72 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-Common commands:
+### 6.3 Common Commands
 
 ```bash
+# Reload service config
 sudo systemctl daemon-reload
+
+# Enable on boot
 sudo systemctl enable ds2api
+
+# Start
 sudo systemctl start ds2api
+
+# Check status
 sudo systemctl status ds2api
+
+# View logs
+sudo journalctl -u ds2api -f
+
+# Restart
+sudo systemctl restart ds2api
+
+# Stop
+sudo systemctl stop ds2api
 ```
 
-## 6. Post-Deploy Checks
+---
+
+## 7. Post-Deploy Checks
+
+After deployment (any method), verify in order:
 
 ```bash
+# 1. Liveness probe
 curl -s http://127.0.0.1:5001/healthz
+# Expected: {"status":"ok"}
+
+# 2. Readiness probe
 curl -s http://127.0.0.1:5001/readyz
+# Expected: {"status":"ready"}
+
+# 3. Model list
 curl -s http://127.0.0.1:5001/v1/models
+# Expected: {"object":"list","data":[...]}
+
+# 4. Admin panel (if WebUI is built)
+curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5001/admin
+# Expected: 200
+
+# 5. Test API call
+curl http://127.0.0.1:5001/v1/chat/completions \
+  -H "Authorization: Bearer your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"deepseek-chat","messages":[{"role":"user","content":"hello"}]}'
 ```
 
-If admin UI is required:
+---
 
-```bash
-curl -s http://127.0.0.1:5001/admin
-```
+## 8. Pre-Release Local Regression
 
-## 7. Pre-release Local Regression (Recommended)
-
-Run the full live testsuite before release:
+Run the full live testsuite before release (real account tests):
 
 ```bash
 ./scripts/testsuite/run-live.sh
 ```
 
-Optional flags:
+With custom flags:
 
 ```bash
 go run ./cmd/ds2api-tests \
@@ -247,7 +476,9 @@ go run ./cmd/ds2api-tests \
 
 The testsuite automatically performs:
 
-- preflight checks (syntax/build/unit tests)
-- isolated config copy startup (no mutation to your original `config.json`)
-- live scenario verification (OpenAI/Claude/Admin/concurrency/toolcall/streaming)
-- full request/response artifact logging for debugging
+- ✅ Preflight checks (syntax/build/unit tests)
+- ✅ Isolated config copy startup (no mutation to your original `config.json`)
+- ✅ Live scenario verification (OpenAI/Claude/Admin/concurrency/toolcall/streaming)
+- ✅ Full request/response artifact logging for debugging
+
+For detailed testsuite documentation, see [TESTING.md](TESTING.md).

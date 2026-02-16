@@ -1,81 +1,119 @@
-# DS2API API Reference (Go Implementation)
+# DS2API API Reference
 
 Language: [中文](API.md) | [English](API.en.md)
 
 This document describes the actual behavior of the current Go codebase.
 
+---
+
+## Table of Contents
+
+- [Basics](#basics)
+- [Authentication](#authentication)
+- [Route Index](#route-index)
+- [Health Endpoints](#health-endpoints)
+- [OpenAI-Compatible API](#openai-compatible-api)
+- [Claude-Compatible API](#claude-compatible-api)
+- [Admin API](#admin-api)
+- [Error Payloads](#error-payloads)
+- [cURL Examples](#curl-examples)
+
+---
+
 ## Basics
 
-- Base URL: `http://localhost:5001` or your deployment domain
-- Default content type: `application/json`
-- Health probes: `GET /healthz`, `GET /readyz`
+| Item | Details |
+| --- | --- |
+| Base URL | `http://localhost:5001` or your deployment domain |
+| Default Content-Type | `application/json` |
+| Health probes | `GET /healthz`, `GET /readyz` |
+| CORS | Enabled (`Access-Control-Allow-Origin: *`) |
 
-### Authentication Rules
+---
 
-Business endpoints (`/v1/*`, `/anthropic/*`) accept either:
+## Authentication
 
-1. `Authorization: Bearer <token>`
-2. `x-api-key: <token>` (without `Bearer`)
+### Business Endpoints (`/v1/*`, `/anthropic/*`)
 
-Admin endpoints:
+Two header formats accepted:
 
-- `POST /admin/login` is public
-- `GET /admin/verify` requires `Authorization: Bearer <jwt>` (JWT only)
-- Other protected `/admin/*` endpoints accept:
-- `Authorization: Bearer <jwt>`
-- `Authorization: Bearer <admin_key>`
+| Method | Example |
+| --- | --- |
+| Bearer Token | `Authorization: Bearer <token>` |
+| API Key Header | `x-api-key: <token>` (no `Bearer` prefix) |
+
+**Auth behavior**:
+
+- Token is in `config.keys` → **Managed account mode**: DS2API auto-selects an account via rotation
+- Token is not in `config.keys` → **Direct token mode**: treated as a DeepSeek token directly
+
+**Optional header**: `X-Ds2-Target-Account: <email_or_mobile>` — Pin a specific managed account.
+
+### Admin Endpoints (`/admin/*`)
+
+| Endpoint | Auth |
+| --- | --- |
+| `POST /admin/login` | Public |
+| `GET /admin/verify` | `Authorization: Bearer <jwt>` (JWT only) |
+| Other `/admin/*` | `Authorization: Bearer <jwt>` or `Authorization: Bearer <admin_key>` |
+
+---
 
 ## Route Index
 
-| Method | Path | Description |
-| --- | --- | --- |
-| GET | `/healthz` | Liveness probe |
-| GET | `/readyz` | Readiness probe |
-| GET | `/v1/models` | OpenAI model list |
-| POST | `/v1/chat/completions` | OpenAI chat completions |
-| GET | `/anthropic/v1/models` | Claude model list |
-| POST | `/anthropic/v1/messages` | Claude messages |
-| POST | `/anthropic/v1/messages/count_tokens` | Claude token counting |
-| POST | `/admin/login` | Admin login |
-| GET | `/admin/verify` | Verify admin JWT |
-| GET | `/admin/vercel/config` | Read preconfigured Vercel creds |
-| GET | `/admin/config` | Read sanitized config |
-| POST | `/admin/config` | Update config |
-| POST | `/admin/keys` | Add API key |
-| DELETE | `/admin/keys/{key}` | Delete API key |
-| GET | `/admin/accounts` | Paginated account list |
-| POST | `/admin/accounts` | Add account |
-| DELETE | `/admin/accounts/{identifier}` | Delete account |
-| GET | `/admin/queue/status` | Account queue status |
-| POST | `/admin/accounts/test` | Test one account |
-| POST | `/admin/accounts/test-all` | Test all accounts |
-| POST | `/admin/import` | Batch import keys/accounts |
-| POST | `/admin/test` | Test API through current service |
-| POST | `/admin/vercel/sync` | Sync config to Vercel |
-| GET | `/admin/vercel/status` | Vercel sync status |
-| GET | `/admin/export` | Export config JSON/Base64 |
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/healthz` | None | Liveness probe |
+| GET | `/readyz` | None | Readiness probe |
+| GET | `/v1/models` | None | OpenAI model list |
+| POST | `/v1/chat/completions` | Business | OpenAI chat completions |
+| GET | `/anthropic/v1/models` | None | Claude model list |
+| POST | `/anthropic/v1/messages` | Business | Claude messages |
+| POST | `/anthropic/v1/messages/count_tokens` | Business | Claude token counting |
+| POST | `/admin/login` | None | Admin login |
+| GET | `/admin/verify` | JWT | Verify admin JWT |
+| GET | `/admin/vercel/config` | Admin | Read preconfigured Vercel creds |
+| GET | `/admin/config` | Admin | Read sanitized config |
+| POST | `/admin/config` | Admin | Update config |
+| POST | `/admin/keys` | Admin | Add API key |
+| DELETE | `/admin/keys/{key}` | Admin | Delete API key |
+| GET | `/admin/accounts` | Admin | Paginated account list |
+| POST | `/admin/accounts` | Admin | Add account |
+| DELETE | `/admin/accounts/{identifier}` | Admin | Delete account |
+| GET | `/admin/queue/status` | Admin | Account queue status |
+| POST | `/admin/accounts/test` | Admin | Test one account |
+| POST | `/admin/accounts/test-all` | Admin | Test all accounts |
+| POST | `/admin/import` | Admin | Batch import keys/accounts |
+| POST | `/admin/test` | Admin | Test API through service |
+| POST | `/admin/vercel/sync` | Admin | Sync config to Vercel |
+| GET | `/admin/vercel/status` | Admin | Vercel sync status |
+| GET | `/admin/export` | Admin | Export config JSON/Base64 |
+
+---
 
 ## Health Endpoints
 
 ### `GET /healthz`
 
 ```json
-{"status":"ok"}
+{"status": "ok"}
 ```
 
 ### `GET /readyz`
 
 ```json
-{"status":"ready"}
+{"status": "ready"}
 ```
+
+---
 
 ## OpenAI-Compatible API
 
 ### `GET /v1/models`
 
-No auth required.
+No auth required. Returns supported models.
 
-Example response:
+**Response**:
 
 ```json
 {
@@ -91,24 +129,24 @@ Example response:
 
 ### `POST /v1/chat/completions`
 
-Headers:
+**Headers**:
 
 ```http
 Authorization: Bearer your-api-key
 Content-Type: application/json
 ```
 
-Core request fields:
+**Request body**:
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `model` | string | yes | `deepseek-chat` / `deepseek-reasoner` / `deepseek-chat-search` / `deepseek-reasoner-search` |
-| `messages` | array | yes | OpenAI-style messages |
-| `stream` | boolean | no | default `false` |
-| `tools` | array | no | Function calling schema |
-| `temperature`, etc. | any | no | accepted in request; final behavior depends on upstream |
+| `model` | string | ✅ | `deepseek-chat` / `deepseek-reasoner` / `deepseek-chat-search` / `deepseek-reasoner-search` |
+| `messages` | array | ✅ | OpenAI-style messages |
+| `stream` | boolean | ❌ | Default `false` |
+| `tools` | array | ❌ | Function calling schema |
+| `temperature`, etc. | any | ❌ | Accepted but final behavior depends on upstream |
 
-Non-stream example:
+#### Non-Stream Response
 
 ```json
 {
@@ -122,7 +160,7 @@ Non-stream example:
       "message": {
         "role": "assistant",
         "content": "final response",
-        "reasoning_content": "reasoning trace"
+        "reasoning_content": "reasoning trace (reasoner models)"
       },
       "finish_reason": "stop"
     }
@@ -138,16 +176,9 @@ Non-stream example:
 }
 ```
 
-### OpenAI Streaming (`stream=true`)
+#### Streaming (`stream=true`)
 
 SSE format: each frame is `data: <json>\n\n`, terminated by `data: [DONE]`.
-
-- First delta may include `role: assistant`
-- Reasoning models emit `delta.reasoning_content`
-- Text emits `delta.content`
-- Last chunk includes `finish_reason` and usage
-
-Example:
 
 ```text
 data: {"id":"...","object":"chat.completion.chunk","choices":[{"delta":{"role":"assistant"},"index":0}]}
@@ -161,15 +192,18 @@ data: {"id":"...","object":"chat.completion.chunk","choices":[{"delta":{},"index
 data: [DONE]
 ```
 
-### Tool Calls (Important)
+**Field notes**:
 
-When `tools` is present, DS2API injects a tool prompt and parses tool-call payloads.
+- First delta includes `role: assistant`
+- `deepseek-reasoner` / `deepseek-reasoner-search` models emit `delta.reasoning_content`
+- Text emits `delta.content`
+- Last chunk includes `finish_reason` and `usage`
 
-- Non-stream: if detected, returns `message.tool_calls`, `finish_reason=tool_calls`, and `message.content=null`
-- Stream: to avoid leaking raw tool-call JSON, DS2API buffers text first; if tool call is detected, only structured `delta.tool_calls` is emitted
-- Stream `delta.tool_calls` is strict-client compatible: each tool call object includes `index` (starting from `0`)
+#### Tool Calls
 
-Tool-call response example:
+When `tools` is present, DS2API performs anti-leak handling:
+
+**Non-stream**: If detected, returns `message.tool_calls`, `finish_reason=tool_calls`, `message.content=null`.
 
 ```json
 {
@@ -196,13 +230,17 @@ Tool-call response example:
 }
 ```
 
+**Stream**: DS2API buffers text first. If tool call detected → only structured `delta.tool_calls` (each with `index`); otherwise emits buffered text at once.
+
+---
+
 ## Claude-Compatible API
 
 ### `GET /anthropic/v1/models`
 
 No auth required.
 
-Example response:
+**Response**:
 
 ```json
 {
@@ -217,7 +255,7 @@ Example response:
 
 ### `POST /anthropic/v1/messages`
 
-Headers can be:
+**Headers**:
 
 ```http
 x-api-key: your-api-key
@@ -225,18 +263,18 @@ Content-Type: application/json
 anthropic-version: 2023-06-01
 ```
 
-Core request fields:
+**Request body**:
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `model` | string | yes | `claude-sonnet-4-20250514` / `-fast` / `-slow` |
-| `messages` | array | yes | Claude-style messages |
-| `max_tokens` | number | no | currently not strictly enforced by upstream bridge |
-| `stream` | boolean | no | default `false` |
-| `system` | string | no | optional system prompt |
-| `tools` | array | no | Claude tool schema |
+| `model` | string | ✅ | `claude-sonnet-4-20250514` / `-fast` / `-slow` |
+| `messages` | array | ✅ | Claude-style messages |
+| `max_tokens` | number | ❌ | Not strictly enforced by upstream bridge |
+| `stream` | boolean | ❌ | Default `false` |
+| `system` | string | ❌ | Optional system prompt |
+| `tools` | array | ❌ | Claude tool schema |
 
-Non-stream example:
+#### Non-Stream Response
 
 ```json
 {
@@ -258,11 +296,9 @@ Non-stream example:
 
 If tool use is detected, `stop_reason` becomes `tool_use` and `content` contains `tool_use` blocks.
 
-### Claude Streaming (`stream=true`)
+#### Streaming (`stream=true`)
 
-SSE uses paired `event:` + `data:` lines. Event type is also carried in JSON `type`.
-
-Example:
+SSE uses paired `event:` + `data:` lines. Event type is also in JSON `type`.
 
 ```text
 event: message_start
@@ -287,15 +323,15 @@ event: message_stop
 data: {"type":"message_stop"}
 ```
 
-Notes:
+**Notes**:
 
-- Thinking-enabled models stream `thinking_delta`.
-- `signature_delta` is not emitted because DeepSeek does not provide verifiable thinking signatures.
-- In `tools` mode, the stream prioritizes avoiding raw tool JSON leakage and does not force `input_json_delta` partials.
+- Thinking-enabled models (`-slow`) stream `thinking_delta`
+- `signature_delta` is not emitted (DeepSeek does not provide verifiable thinking signatures)
+- In `tools` mode, the stream avoids leaking raw tool JSON and does not force `input_json_delta`
 
 ### `POST /anthropic/v1/messages/count_tokens`
 
-Request example:
+**Request**:
 
 ```json
 {
@@ -306,7 +342,7 @@ Request example:
 }
 ```
 
-Response example:
+**Response**:
 
 ```json
 {
@@ -314,11 +350,15 @@ Response example:
 }
 ```
 
+---
+
 ## Admin API
 
 ### `POST /admin/login`
 
-Request:
+Public endpoint.
+
+**Request**:
 
 ```json
 {
@@ -327,9 +367,9 @@ Request:
 }
 ```
 
-`expire_hours` is optional, default 24.
+`expire_hours` is optional, default `24`.
 
-Response:
+**Response**:
 
 ```json
 {
@@ -341,9 +381,9 @@ Response:
 
 ### `GET /admin/verify`
 
-Header: `Authorization: Bearer <jwt>`
+Requires JWT: `Authorization: Bearer <jwt>`
 
-Response:
+**Response**:
 
 ```json
 {
@@ -355,6 +395,8 @@ Response:
 
 ### `GET /admin/vercel/config`
 
+Returns Vercel preconfiguration status.
+
 ```json
 {
   "has_token": true,
@@ -365,7 +407,7 @@ Response:
 
 ### `GET /admin/config`
 
-Sanitized config response:
+Returns sanitized config.
 
 ```json
 {
@@ -390,7 +432,7 @@ Sanitized config response:
 
 Updatable fields: `keys`, `accounts`, `claude_mapping`.
 
-Request example:
+**Request**:
 
 ```json
 {
@@ -408,29 +450,25 @@ Request example:
 ### `POST /admin/keys`
 
 ```json
-{"key":"new-api-key"}
+{"key": "new-api-key"}
 ```
 
-Response:
-
-```json
-{"success":true,"total_keys":3}
-```
+**Response**: `{"success": true, "total_keys": 3}`
 
 ### `DELETE /admin/keys/{key}`
 
-```json
-{"success":true,"total_keys":2}
-```
+**Response**: `{"success": true, "total_keys": 2}`
 
 ### `GET /admin/accounts`
 
-Query params:
+**Query params**:
 
-- `page` (default 1)
-- `page_size` (default 10, max 100)
+| Param | Default | Range |
+| --- | --- | --- |
+| `page` | `1` | ≥ 1 |
+| `page_size` | `10` | 1–100 |
 
-Response:
+**Response**:
 
 ```json
 {
@@ -453,20 +491,16 @@ Response:
 ### `POST /admin/accounts`
 
 ```json
-{"email":"user@example.com","password":"pwd"}
+{"email": "user@example.com", "password": "pwd"}
 ```
 
-```json
-{"success":true,"total_accounts":6}
-```
+**Response**: `{"success": true, "total_accounts": 6}`
 
 ### `DELETE /admin/accounts/{identifier}`
 
 `identifier` is email or mobile.
 
-```json
-{"success":true,"total_accounts":5}
-```
+**Response**: `{"success": true, "total_accounts": 5}`
 
 ### `GET /admin/queue/status`
 
@@ -482,29 +516,30 @@ Response:
 }
 ```
 
-Field notes:
-
-- `max_inflight_per_account`: per-account in-flight limit (default `2`, override via env)
-- `recommended_concurrency`: suggested client concurrency, dynamically computed as `account_count * max_inflight_per_account`
+| Field | Description |
+| --- | --- |
+| `available` | Currently available accounts |
+| `in_use` | Currently in-use accounts |
+| `total` | Total accounts |
+| `max_inflight_per_account` | Per-account inflight limit |
+| `recommended_concurrency` | Suggested concurrency (`total × max_inflight_per_account`) |
 
 ### `POST /admin/accounts/test`
 
-Request fields:
-
 | Field | Required | Notes |
 | --- | --- | --- |
-| `identifier` | yes | email or mobile |
-| `model` | no | default `deepseek-chat` |
-| `message` | no | if empty, only session creation is tested |
+| `identifier` | ✅ | email or mobile |
+| `model` | ❌ | default `deepseek-chat` |
+| `message` | ❌ | if empty, only session creation is tested |
 
-Response example:
+**Response**:
 
 ```json
 {
   "account": "user@example.com",
   "success": true,
   "response_time": 1240,
-  "message": "API 测试成功（仅会话创建）",
+  "message": "API test successful (session creation only)",
   "model": "deepseek-chat"
 }
 ```
@@ -518,20 +553,26 @@ Optional request field: `model`.
   "total": 5,
   "success": 4,
   "failed": 1,
-  "results": []
+  "results": [...]
 }
 ```
 
 ### `POST /admin/import`
 
+Batch import keys and accounts.
+
+**Request**:
+
 ```json
 {
   "keys": ["k1", "k2"],
   "accounts": [
-    {"email":"user@example.com","password":"pwd","token":""}
+    {"email": "user@example.com", "password": "pwd", "token": ""}
   ]
 }
 ```
+
+**Response**:
 
 ```json
 {
@@ -543,41 +584,41 @@ Optional request field: `model`.
 
 ### `POST /admin/test`
 
-Optional request fields:
+Test API availability through the service itself.
 
-- `model` (default `deepseek-chat`)
-- `message` (default `你好`)
-- `api_key` (default first key in config)
+| Field | Required | Default |
+| --- | --- | --- |
+| `model` | ❌ | `deepseek-chat` |
+| `message` | ❌ | `你好` |
+| `api_key` | ❌ | First key in config |
 
-Response example:
+**Response**:
 
 ```json
 {
   "success": true,
   "status_code": 200,
-  "response": {"id":"..."}
+  "response": {"id": "..."}
 }
 ```
 
 ### `POST /admin/vercel/sync`
 
-Request fields:
-
 | Field | Required | Notes |
 | --- | --- | --- |
-| `vercel_token` | no | if empty or `__USE_PRECONFIG__`, read env |
-| `project_id` | no | fallback: `VERCEL_PROJECT_ID` |
-| `team_id` | no | fallback: `VERCEL_TEAM_ID` |
-| `auto_validate` | no | default `true` |
-| `save_credentials` | no | default `true` |
+| `vercel_token` | ❌ | If empty or `__USE_PRECONFIG__`, read env |
+| `project_id` | ❌ | Fallback: `VERCEL_PROJECT_ID` |
+| `team_id` | ❌ | Fallback: `VERCEL_TEAM_ID` |
+| `auto_validate` | ❌ | Default `true` |
+| `save_credentials` | ❌ | Default `true` |
 
-Success response example:
+**Success response**:
 
 ```json
 {
   "success": true,
   "validated_accounts": 3,
-  "message": "配置已同步，正在重新部署...",
+  "message": "Config synced, redeploying...",
   "deployment_url": "https://..."
 }
 ```
@@ -588,7 +629,7 @@ Or manual deploy required:
 {
   "success": true,
   "validated_accounts": 3,
-  "message": "配置已同步到 Vercel，请手动触发重新部署",
+  "message": "Config synced to Vercel, please trigger redeploy manually",
   "manual_deploy_required": true
 }
 ```
@@ -612,19 +653,33 @@ Or manual deploy required:
 }
 ```
 
+---
+
 ## Error Payloads
 
-Error payload formats are not fully unified in current code:
+Error formats vary by module:
 
-- OpenAI routes return: `{"error":{"message":"...","type":"..."}}`
-- Claude routes often return: `{"error":{"type":"...","message":"..."}}`
-- Admin routes often return: `{"detail":"..."}`
+| Module | Format |
+| --- | --- |
+| OpenAI routes | `{"error": {"message": "...", "type": "..."}}` |
+| Claude routes | `{"error": {"type": "...", "message": "..."}}` |
+| Admin routes | `{"detail": "..."}` |
 
 Clients should handle HTTP status code plus `error` / `detail` fields.
 
+**Common status codes**:
+
+| Code | Meaning |
+| --- | --- |
+| `401` | Authentication failed (invalid key/token, or expired admin JWT) |
+| `429` | Too many requests (exceeded inflight + queue capacity) |
+| `503` | Model unavailable or upstream error |
+
+---
+
 ## cURL Examples
 
-### OpenAI non-stream
+### OpenAI Non-Stream
 
 ```bash
 curl http://localhost:5001/v1/chat/completions \
@@ -637,7 +692,7 @@ curl http://localhost:5001/v1/chat/completions \
   }'
 ```
 
-### OpenAI stream
+### OpenAI Stream
 
 ```bash
 curl http://localhost:5001/v1/chat/completions \
@@ -650,7 +705,48 @@ curl http://localhost:5001/v1/chat/completions \
   }'
 ```
 
-### Claude
+### OpenAI with Search
+
+```bash
+curl http://localhost:5001/v1/chat/completions \
+  -H "Authorization: Bearer your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-chat-search",
+    "messages": [{"role": "user", "content": "Latest news today"}],
+    "stream": true
+  }'
+```
+
+### OpenAI Tool Calling
+
+```bash
+curl http://localhost:5001/v1/chat/completions \
+  -H "Authorization: Bearer your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-chat",
+    "messages": [{"role": "user", "content": "What is the weather in Beijing?"}],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_weather",
+          "description": "Get weather for a city",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {"type": "string", "description": "City name"}
+            },
+            "required": ["city"]
+          }
+        }
+      }
+    ]
+  }'
+```
+
+### Claude Non-Stream
 
 ```bash
 curl http://localhost:5001/anthropic/v1/messages \
@@ -660,6 +756,42 @@ curl http://localhost:5001/anthropic/v1/messages \
   -d '{
     "model": "claude-sonnet-4-20250514",
     "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
+```
+
+### Claude Stream
+
+```bash
+curl http://localhost:5001/anthropic/v1/messages \
+  -H "x-api-key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "claude-sonnet-4-20250514-slow",
+    "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "Explain relativity"}],
+    "stream": true
+  }'
+```
+
+### Admin Login
+
+```bash
+curl http://localhost:5001/admin/login \
+  -H "Content-Type: application/json" \
+  -d '{"admin_key": "admin"}'
+```
+
+### Pin Specific Account
+
+```bash
+curl http://localhost:5001/v1/chat/completions \
+  -H "Authorization: Bearer your-api-key" \
+  -H "X-Ds2-Target-Account: user@example.com" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-chat",
     "messages": [{"role": "user", "content": "Hello"}]
   }'
 ```
