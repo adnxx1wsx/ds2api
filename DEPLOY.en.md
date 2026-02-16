@@ -67,6 +67,9 @@ Notes:
 - Rewrites and cache headers: `vercel.json`
 - Build stage runs `npm ci --prefix webui && npm run build --prefix webui` automatically
 - `vercel.json` routes `/admin/assets/*` and the `/admin` page to static output, while `/admin/*` APIs still go to `api/index`
+- To mitigate Go Runtime streaming buffering, `/v1/chat/completions` on Vercel is routed to `api/chat-stream.js` (Node Runtime)
+- `api/chat-stream.js` automatically falls back to the Go entry for non-stream requests or requests with `tools` (internal `__go=1`)
+- `api/chat-stream.js` is data-path only (stream relay + SSE conversion); auth/account/session/PoW preparation still comes from an internal Go prepare endpoint (enabled on Vercel only)
 
 Minimum environment variables:
 
@@ -82,6 +85,7 @@ Optional:
 - `DS2API_ACCOUNT_CONCURRENCY` (alias of the same setting)
 - `DS2API_ACCOUNT_MAX_QUEUE` (waiting queue limit, default=`recommended_concurrency`)
 - `DS2API_ACCOUNT_QUEUE_SIZE` (alias of the same setting)
+- `DS2API_VERCEL_INTERNAL_SECRET` (optional internal auth secret for Vercel hybrid streaming path; falls back to `DS2API_ADMIN_KEY` when unset)
 
 Recommended concurrency is computed dynamically as `account_count * per_account_inflight_limit` (default is `account_count * 2`).
 When inflight slots are full, requests are queued first; with default queue size, 429 typically starts around `account_count * 4`.
@@ -139,14 +143,19 @@ If you see:
 No Output Directory named "public" found after the Build completed.
 ```
 
-Vercel is validating frontend output against `public`, while this repo emits WebUI assets to `static/admin`.
+Vercel is validating frontend output against `public`. This repo builds WebUI into `static/admin`, and uses the parent directory `static` as Vercel output root.
 `vercel.json` now explicitly sets:
 
 ```json
-"outputDirectory": "static/admin"
+"outputDirectory": "static"
 ```
 
-If you manually changed Output Directory in Project Settings, set it to `static/admin` (or clear it and let repo config apply).
+If you manually changed Output Directory in Project Settings, set it to `static` (or clear it and let repo config apply).
+
+Vercel streaming note (important):
+
+- Vercel Go Runtime applies platform-level buffering, so this repo uses a hybrid path on Vercel (`Go prepare + Node stream`) to restore real-time SSE behavior.
+- This adaptation is Vercel-only; local and Docker remain pure Go.
 
 ## 4. Reverse Proxy (Nginx)
 

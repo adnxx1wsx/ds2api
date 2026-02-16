@@ -87,6 +87,8 @@ docker-compose logs -f
 - 入口：`api/index.go`
 - 路由重写：`vercel.json`
 - `vercel.json` 会在构建阶段自动执行 `npm ci --prefix webui && npm run build --prefix webui`
+- `/v1/chat/completions` 在 Vercel 上默认走 `api/chat-stream.js`（Node Runtime）以保证实时 SSE
+- `api/chat-stream.js` 仅负责流式数据转发；鉴权、账号选择、会话/PoW 准备仍由 Go 内部 prepare 接口处理
 - 至少配置：
 - `DS2API_ADMIN_KEY`
 - `DS2API_CONFIG_JSON`（JSON 字符串或 Base64）
@@ -166,6 +168,7 @@ cp config.example.json config.json
 | `DS2API_WASM_PATH` | PoW wasm 文件路径 |
 | `DS2API_STATIC_ADMIN_DIR` | 管理台静态文件目录 |
 | `DS2API_AUTO_BUILD_WEBUI` | 启动时缺失 WebUI 时是否自动执行 npm build（默认：本地开启，Vercel 关闭） |
+| `DS2API_VERCEL_INTERNAL_SECRET` | Vercel 混合流式链路内部鉴权密钥（可选；未设置时回退用 `DS2API_ADMIN_KEY`） |
 | `VERCEL_TOKEN` | Vercel 同步 token（可选） |
 | `VERCEL_PROJECT_ID` | Vercel 项目 ID（可选） |
 | `VERCEL_TEAM_ID` | Vercel 团队 ID（可选） |

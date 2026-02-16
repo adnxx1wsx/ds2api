@@ -1,8 +1,27 @@
 {
   "version": 2,
   "buildCommand": "npm ci --prefix webui && npm run build --prefix webui",
-  "outputDirectory": "static/admin",
+  "outputDirectory": "static",
+  "functions": {
+    "api/chat-stream.js": {
+      "includeFiles": "**/sha3_wasm_bg.7b9ca65ddd.wasm"
+    }
+  },
   "rewrites": [
+    {
+      "source": "/v1/chat/completions",
+      "has": [
+        {
+          "type": "query",
+          "key": "__go"
+        }
+      ],
+      "destination": "/api/index"
+    },
+    {
+      "source": "/v1/chat/completions",
+      "destination": "/api/chat-stream"
+    },
     {
       "source": "/admin/login",
       "destination": "/api/index"
@@ -44,16 +63,16 @@
       "destination": "/api/index"
     },
     {
-      "source": "/admin/assets/(.*)",
-      "destination": "/assets/$1"
+      "source": "/admin",
+      "destination": "/admin/index.html"
     },
     {
-      "source": "/admin",
-      "destination": "/index.html"
+      "source": "/admin/assets/(.*)",
+      "destination": "/admin/assets/$1"
     },
     {
       "source": "/admin/(.*)",
-      "destination": "/index.html"
+      "destination": "/admin/index.html"
     },
     {
       "source": "/(.*)",

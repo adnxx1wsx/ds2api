@@ -230,19 +230,21 @@ func collectDeepSeek(resp *http.Response, thinkingEnabled bool) (string, string)
 
 func (h *Handler) writeClaudeStream(w http.ResponseWriter, r *http.Request, model string, messages []any, fullText string, detected []util.ParsedToolCall) {
 	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-cache, no-transform")
 	w.Header().Set("Connection", "keep-alive")
-	flusher, hasFlusher := w.(http.Flusher)
-	if !hasFlusher {
-		config.Logger.Warn("[claude_stream] response writer does not support flush; falling back to buffered SSE")
+	w.Header().Set("X-Accel-Buffering", "no")
+	rc := http.NewResponseController(w)
+	canFlush := rc.Flush() == nil
+	if !canFlush {
+		config.Logger.Warn("[claude_stream] response writer does not support flush; streaming may be buffered")
 	}
 	send := func(v any) {
 		b, _ := json.Marshal(v)
 		_, _ = w.Write([]byte("data: "))
 		_, _ = w.Write(b)
 		_, _ = w.Write([]byte("\n\n"))
-		if hasFlusher {
-			flusher.Flush()
+		if canFlush {
+			_ = rc.Flush()
 		}
 	}
 	messageID := fmt.Sprintf("msg_%d", time.Now().UnixNano())

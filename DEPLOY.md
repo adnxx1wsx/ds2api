@@ -67,6 +67,9 @@ docker-compose up -d --build
 - 路由与缓存头：`vercel.json`
 - 构建阶段会自动执行 `npm ci --prefix webui && npm run build --prefix webui`
 - `vercel.json` 已将 `/admin/assets/*` 与 `/admin` 页面走静态产物，`/admin/*` API 仍走 `api/index`
+- 为缓解 Go Runtime 的流式缓冲，`/v1/chat/completions` 在 Vercel 上会优先走 `api/chat-stream.js`（Node Runtime）
+- `api/chat-stream.js` 对非流式请求或 `tools` 请求会自动回退到 Go 入口（内部 `__go=1`）
+- `api/chat-stream.js` 仅负责流式数据转发与 SSE 转换；鉴权、账号选择、会话创建、PoW 计算仍由 Go 内部 prepare 接口完成（仅 Vercel 启用）
 
 至少配置环境变量：
 
@@ -82,6 +85,7 @@ docker-compose up -d --build
 - `DS2API_ACCOUNT_CONCURRENCY`（同上别名）
 - `DS2API_ACCOUNT_MAX_QUEUE`（等待队列上限，默认=`recommended_concurrency`）
 - `DS2API_ACCOUNT_QUEUE_SIZE`（同上别名）
+- `DS2API_VERCEL_INTERNAL_SECRET`（可选，Vercel 混合流式链路内部鉴权；未设置时回退使用 `DS2API_ADMIN_KEY`）
 
 并发建议值会动态按 `账号数量 × 每账号并发上限` 计算（默认即 `账号数量 × 2`）。
 当 in-flight 满时，请求先进入等待队列；默认队列上限等于建议并发值，因此默认 429 阈值约为 `账号数量 × 4`。
@@ -138,13 +142,18 @@ Error: Command failed: go build -ldflags -s -w -o .../bootstrap .../main__vc__go
 No Output Directory named "public" found after the Build completed.
 ```
 
-说明 Vercel 正在按 `public` 校验前端产物目录。当前仓库前端产物目录是 `static/admin`，已在 `vercel.json` 显式配置：
+说明 Vercel 正在按 `public` 校验前端产物目录。当前仓库会将 WebUI 构建到 `static/admin`，并在 `vercel.json` 使用上级目录 `static` 作为输出根目录：
 
 ```json
-"outputDirectory": "static/admin"
+"outputDirectory": "static"
 ```
 
-若你在项目设置里手动改过 Output Directory，请同步改为 `static/admin` 或清空让仓库配置生效。
+若你在项目设置里手动改过 Output Directory，请同步改为 `static` 或清空让仓库配置生效。
+
+Vercel 流式说明（重要）：
+
+- Vercel 的 Go Runtime 存在平台层响应缓冲，因此本项目在 Vercel 上采用“Go prepare + Node stream”的混合链路来恢复实时 SSE。
+- 该适配只在 Vercel 生效；本地与 Docker 仍走纯 Go 链路。
 
 ## 4. 反向代理（Nginx）
 

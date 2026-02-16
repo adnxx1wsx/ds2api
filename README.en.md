@@ -87,6 +87,8 @@ docker-compose logs -f
 - Entrypoint: `api/index.go`
 - Rewrites: `vercel.json`
 - `vercel.json` runs `npm ci --prefix webui && npm run build --prefix webui` during build
+- `/v1/chat/completions` is routed to `api/chat-stream.js` (Node Runtime) on Vercel to preserve real-time SSE
+- `api/chat-stream.js` is data-path only; auth/account/session/PoW preparation still comes from an internal Go prepare endpoint
 - Minimum env vars:
 - `DS2API_ADMIN_KEY`
 - `DS2API_CONFIG_JSON` (raw JSON or Base64)
@@ -166,6 +168,7 @@ cp config.example.json config.json
 | `DS2API_WASM_PATH` | PoW wasm path |
 | `DS2API_STATIC_ADMIN_DIR` | Admin static assets dir |
 | `DS2API_AUTO_BUILD_WEBUI` | Auto run npm build on startup when WebUI assets are missing (default: enabled locally, disabled on Vercel) |
+| `DS2API_VERCEL_INTERNAL_SECRET` | Internal auth secret for Vercel hybrid streaming path (optional; falls back to `DS2API_ADMIN_KEY` if unset) |
 | `VERCEL_TOKEN` | Vercel sync token (optional) |
 | `VERCEL_PROJECT_ID` | Vercel project ID (optional) |
 | `VERCEL_TEAM_ID` | Vercel team ID (optional) |
