@@ -6,17 +6,24 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
+
+var warnOnce sync.Once
 
 func AdminKey() string {
 	if v := strings.TrimSpace(os.Getenv("DS2API_ADMIN_KEY")); v != "" {
 		return v
 	}
+	warnOnce.Do(func() {
+		slog.Warn("⚠️  DS2API_ADMIN_KEY is not set! Using insecure default \"admin\". Set a strong key in production!")
+	})
 	return "admin"
 }
 

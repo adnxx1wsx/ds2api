@@ -310,8 +310,8 @@ func (s *Store) Update(mutator func(*Config) error) error {
 }
 
 func (s *Store) Save() error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.fromEnv {
 		Logger.Info("[save_config] source from env, skip write")
 		return nil

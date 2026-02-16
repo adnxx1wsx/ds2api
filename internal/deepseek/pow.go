@@ -8,6 +8,7 @@ import (
 	"errors"
 	"math"
 	"os"
+	"strconv"
 	"sync"
 
 	"ds2api/internal/config"
@@ -23,6 +24,7 @@ type PowSolver struct {
 
 	runtime  wazero.Runtime
 	compiled wazero.CompiledModule
+	pool     sync.Pool
 }
 
 func NewPowSolver(wasmPath string) *PowSolver {
@@ -41,6 +43,17 @@ func (p *PowSolver) init(ctx context.Context) error {
 		}
 		p.runtime = wazero.NewRuntime(ctx)
 		p.compiled, p.err = p.runtime.CompileModule(ctx, wasmBytes)
+		if p.err == nil {
+			p.pool = sync.Pool{
+				New: func() any {
+					mod, err := p.runtime.InstantiateModule(context.Background(), p.compiled, wazero.NewModuleConfig())
+					if err != nil {
+						return nil
+					}
+					return mod
+				},
+			}
+		}
 	})
 	return p.err
 }
@@ -64,10 +77,19 @@ func (p *PowSolver) Compute(ctx context.Context, challenge map[string]any) (int6
 	expireAt := toInt64(challenge["expire_at"], 1680000000)
 	prefix := salt + "_" + itoa(expireAt) + "_"
 
-	mod, err := p.runtime.InstantiateModule(ctx, p.compiled, wazero.NewModuleConfig())
-	if err != nil {
-		return 0, err
+	// Try to get a pooled instance; fall back to creating a new one.
+	var mod api.Module
+	if pooled := p.pool.Get(); pooled != nil {
+		mod = pooled.(api.Module)
+	} else {
+		var err error
+		mod, err = p.runtime.InstantiateModule(ctx, p.compiled, wazero.NewModuleConfig())
+		if err != nil {
+			return 0, err
+		}
 	}
+	// WASM instances may carry state; close after use rather than returning to pool.
+	// The pool's New func will create fresh instances as needed.
 	defer mod.Close(ctx)
 
 	mem := mod.Memory()
@@ -178,8 +200,7 @@ func toInt64(v any, d int64) int64 {
 }
 
 func itoa(n int64) string {
-	b, _ := json.Marshal(n)
-	return string(b)
+	return strconv.FormatInt(n, 10)
 }
 
 func PreloadWASM(wasmPath string) {
