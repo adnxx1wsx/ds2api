@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"ds2api/internal/auth"
 	"ds2api/internal/config"
 	"ds2api/internal/server"
 	"ds2api/internal/webui"
@@ -16,6 +17,7 @@ import (
 
 func main() {
 	webui.EnsureBuiltOnStartup()
+	_ = auth.AdminKey()
 	app := server.NewApp()
 	port := strings.TrimSpace(os.Getenv("PORT"))
 	if port == "" {

@@ -116,4 +116,4 @@
 
 1.  **Phase 1 (Fix Critical) ✅ 已完成:** ~~修复 `Save()` 锁问题、WASM 重复创建、Admin 默认密码警告、Graceful Shutdown。删除无用大文件。~~ 同时修复了 `itoa` 低效实现。
 2.  **Phase 2 (Refactor) ✅ 已完成:** ~~统一 API Key/Account 的索引机制，重构 SSE 解析逻辑 (DRY)，优化 `testAllAccounts` 并发。~~ 同时完成了重复工具函数的统一清理（`writeJSON`/`toBool`/`intFrom` → `internal/util`）。
-3.  **Phase 3 (Cleanup):** 优化 CORS，改进 Token 估算等微小性能点。
+3.  **Phase 3 (Cleanup) ✅ 已完成:** ~~优化 CORS，改进 Token 估算等微小性能点。~~ CORS 改为动态反射 Origin；Token 估算区分 ASCII/非 ASCII 字符。

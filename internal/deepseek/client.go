@@ -48,6 +48,10 @@ func NewClient(store *config.Store, resolver *auth.Resolver) *Client {
 	}
 }
 
+func (c *Client) PreloadPow(ctx context.Context) error {
+	return c.powSolver.init(ctx)
+}
+
 func (c *Client) Login(ctx context.Context, acc config.Account) (string, error) {
 	payload := map[string]any{
 		"password":  strings.TrimSpace(acc.Password),

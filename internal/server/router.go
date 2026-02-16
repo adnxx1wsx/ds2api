@@ -36,7 +36,11 @@ func NewApp() *App {
 		return dsClient.Login(ctx, acc)
 	})
 	dsClient = deepseek.NewClient(store, resolver)
-	deepseek.PreloadWASM(config.WASMPath())
+	if err := dsClient.PreloadPow(context.Background()); err != nil {
+		config.Logger.Warn("[WASM] preload failed", "error", err)
+	} else {
+		config.Logger.Info("[WASM] module preloaded", "path", config.WASMPath())
+	}
 
 	openaiHandler := &openai.Handler{Store: store, Auth: resolver, DS: dsClient}
 	claudeHandler := &claude.Handler{Store: store, Auth: resolver, DS: dsClient}
@@ -86,8 +90,18 @@ func timeout(d time.Duration) func(http.Handler) http.Handler {
 
 func cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			// Dynamically reflect the request origin to allow credentials.
+			// Using "*" with Access-Control-Allow-Credentials: true is
+			// invalid per the CORS spec and will be rejected by browsers.
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Vary", "Origin")
+		} else {
+			// No Origin header (e.g. server-to-server requests); allow all.
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == http.MethodOptions {
