@@ -56,11 +56,6 @@ func (h *Handler) handleVercelStreamPrepare(w http.ResponseWriter, r *http.Reque
 		writeOpenAIError(w, http.StatusBadRequest, "stream must be true")
 		return
 	}
-	if tools, ok := req["tools"].([]any); ok && len(tools) > 0 {
-		writeOpenAIError(w, http.StatusBadRequest, "tools are not supported by vercel stream prepare")
-		return
-	}
-
 	model, _ := req["model"].(string)
 	messagesRaw, _ := req["messages"].([]any)
 	if model == "" || len(messagesRaw) == 0 {
@@ -74,6 +69,9 @@ func (h *Handler) handleVercelStreamPrepare(w http.ResponseWriter, r *http.Reque
 	}
 
 	messages := normalizeMessages(messagesRaw)
+	if tools, ok := req["tools"].([]any); ok && len(tools) > 0 {
+		messages, _ = injectToolPrompt(messages, tools)
+	}
 	finalPrompt := util.MessagesPrepare(messages)
 
 	sessionID, err := h.DS.CreateSession(r.Context(), a, 3)

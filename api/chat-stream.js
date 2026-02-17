@@ -62,7 +62,7 @@ module.exports = async function handler(req, res) {
   }
 
   // Keep all non-stream behavior on Go side to avoid compatibility regressions.
-  if (!toBool(payload.stream) || (Array.isArray(payload.tools) && payload.tools.length > 0)) {
+  if (!toBool(payload.stream)) {
     await proxyToGo(req, res, rawBody);
     return;
   }
@@ -626,8 +626,34 @@ async function proxyToGo(req, res, rawBody) {
     }
     res.setHeader(key, value);
   });
-  const bytes = Buffer.from(await upstream.arrayBuffer());
-  res.end(bytes);
+
+  if (!upstream.body || typeof upstream.body.getReader !== 'function') {
+    const bytes = Buffer.from(await upstream.arrayBuffer());
+    res.end(bytes);
+    return;
+  }
+
+  const reader = upstream.body.getReader();
+  try {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (value && value.length > 0) {
+        res.write(Buffer.from(value));
+        if (typeof res.flush === 'function') {
+          res.flush();
+        }
+      }
+    }
+    res.end();
+  } catch (_err) {
+    if (!res.writableEnded) {
+      res.end();
+    }
+  }
 }
 
 function writeOpenAIError(res, status, message) {
