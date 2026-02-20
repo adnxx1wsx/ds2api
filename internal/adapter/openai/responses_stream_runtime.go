@@ -15,6 +15,7 @@ type responsesStreamRuntime struct {
 	w        http.ResponseWriter
 	rc       *http.ResponseController
 	canFlush bool
+	writable bool
 
 	responseID  string
 	model       string
@@ -54,6 +55,7 @@ func newResponsesStreamRuntime(
 		w:                   w,
 		rc:                  rc,
 		canFlush:            canFlush,
+		writable:            true,
 		responseID:          responseID,
 		model:               model,
 		finalPrompt:         finalPrompt,
@@ -67,39 +69,93 @@ func newResponsesStreamRuntime(
 	}
 }
 
-func (s *responsesStreamRuntime) sendEvent(event string, payload map[string]any) {
+func (s *responsesStreamRuntime) sendEvent(event string, payload map[string]any) bool {
+	if !s.writable {
+		return false
+	}
 	b, _ := json.Marshal(payload)
-	_, _ = s.w.Write([]byte("event: " + event + "\n"))
-	_, _ = s.w.Write([]byte("data: "))
-	_, _ = s.w.Write(b)
-	_, _ = s.w.Write([]byte("\n\n"))
-	if s.canFlush {
-		_ = s.rc.Flush()
+	if _, err := s.w.Write([]byte("event: " + event + "\n")); err != nil {
+		s.writable = false
+		return false
 	}
+	if _, err := s.w.Write([]byte("data: ")); err != nil {
+		s.writable = false
+		return false
+	}
+	if _, err := s.w.Write(b); err != nil {
+		s.writable = false
+		return false
+	}
+	if _, err := s.w.Write([]byte("\n\n")); err != nil {
+		s.writable = false
+		return false
+	}
+	if s.canFlush {
+		if err := s.rc.Flush(); err != nil {
+			s.writable = false
+			return false
+		}
+	}
+	return true
 }
 
-func (s *responsesStreamRuntime) sendCreated() {
-	s.sendEvent("response.created", openaifmt.BuildResponsesCreatedPayload(s.responseID, s.model))
+func (s *responsesStreamRuntime) sendKeepAlive() bool {
+	if !s.writable {
+		return false
+	}
+	if !s.canFlush {
+		return true
+	}
+	if _, err := s.w.Write([]byte(": keep-alive\n\n")); err != nil {
+		s.writable = false
+		return false
+	}
+	if err := s.rc.Flush(); err != nil {
+		s.writable = false
+		return false
+	}
+	return true
 }
 
-func (s *responsesStreamRuntime) sendDone() {
-	_, _ = s.w.Write([]byte("data: [DONE]\n\n"))
-	if s.canFlush {
-		_ = s.rc.Flush()
+func (s *responsesStreamRuntime) sendCreated() bool {
+	return s.sendEvent("response.created", openaifmt.BuildResponsesCreatedPayload(s.responseID, s.model))
+}
+
+func (s *responsesStreamRuntime) sendDone() bool {
+	if !s.writable {
+		return false
 	}
+	if _, err := s.w.Write([]byte("data: [DONE]\n\n")); err != nil {
+		s.writable = false
+		return false
+	}
+	if s.canFlush {
+		if err := s.rc.Flush(); err != nil {
+			s.writable = false
+			return false
+		}
+	}
+	return true
 }
 
 func (s *responsesStreamRuntime) finalize() {
+	if !s.writable {
+		return
+	}
 	finalThinking := s.thinking.String()
 	finalText := s.text.String()
 	if s.bufferToolContent {
 		for _, evt := range flushToolSieve(&s.sieve, s.toolNames) {
 			if evt.Content != "" {
-				s.sendEvent("response.output_text.delta", openaifmt.BuildResponsesTextDeltaPayload(s.responseID, evt.Content))
+				if !s.sendEvent("response.output_text.delta", openaifmt.BuildResponsesTextDeltaPayload(s.responseID, evt.Content)) {
+					return
+				}
 			}
 			if len(evt.ToolCalls) > 0 {
 				s.toolCallsEmitted = true
-				s.sendEvent("response.output_tool_call.done", openaifmt.BuildResponsesToolCallDonePayload(s.responseID, util.FormatOpenAIStreamToolCalls(evt.ToolCalls)))
+				if !s.sendEvent("response.output_tool_call.done", openaifmt.BuildResponsesToolCallDonePayload(s.responseID, util.FormatOpenAIStreamToolCalls(evt.ToolCalls))) {
+					return
+				}
 			}
 		}
 	}
@@ -111,11 +167,16 @@ func (s *responsesStreamRuntime) finalize() {
 	if s.persistResponse != nil {
 		s.persistResponse(obj)
 	}
-	s.sendEvent("response.completed", openaifmt.BuildResponsesCompletedPayload(obj))
+	if !s.sendEvent("response.completed", openaifmt.BuildResponsesCompletedPayload(obj)) {
+		return
+	}
 	s.sendDone()
 }
 
 func (s *responsesStreamRuntime) onParsed(parsed sse.LineResult) streamengine.ParsedDecision {
+	if !s.writable {
+		return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested}
+	}
 	if !parsed.Parsed {
 		return streamengine.ParsedDecision{}
 	}
@@ -137,29 +198,39 @@ func (s *responsesStreamRuntime) onParsed(parsed sse.LineResult) streamengine.Pa
 				continue
 			}
 			s.thinking.WriteString(p.Text)
-			s.sendEvent("response.reasoning.delta", openaifmt.BuildResponsesReasoningDeltaPayload(s.responseID, p.Text))
+			if !s.sendEvent("response.reasoning.delta", openaifmt.BuildResponsesReasoningDeltaPayload(s.responseID, p.Text)) {
+				return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested}
+			}
 			continue
 		}
 
 		s.text.WriteString(p.Text)
 		if !s.bufferToolContent {
-			s.sendEvent("response.output_text.delta", openaifmt.BuildResponsesTextDeltaPayload(s.responseID, p.Text))
+			if !s.sendEvent("response.output_text.delta", openaifmt.BuildResponsesTextDeltaPayload(s.responseID, p.Text)) {
+				return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested}
+			}
 			continue
 		}
 		for _, evt := range processToolSieveChunk(&s.sieve, p.Text, s.toolNames) {
 			if evt.Content != "" {
-				s.sendEvent("response.output_text.delta", openaifmt.BuildResponsesTextDeltaPayload(s.responseID, evt.Content))
+				if !s.sendEvent("response.output_text.delta", openaifmt.BuildResponsesTextDeltaPayload(s.responseID, evt.Content)) {
+					return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested}
+				}
 			}
 			if len(evt.ToolCallDeltas) > 0 {
 				if !s.emitEarlyToolDeltas {
 					continue
 				}
 				s.toolCallsEmitted = true
-				s.sendEvent("response.output_tool_call.delta", openaifmt.BuildResponsesToolCallDeltaPayload(s.responseID, formatIncrementalStreamToolCallDeltas(evt.ToolCallDeltas, s.streamToolCallIDs)))
+				if !s.sendEvent("response.output_tool_call.delta", openaifmt.BuildResponsesToolCallDeltaPayload(s.responseID, formatIncrementalStreamToolCallDeltas(evt.ToolCallDeltas, s.streamToolCallIDs))) {
+					return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested}
+				}
 			}
 			if len(evt.ToolCalls) > 0 {
 				s.toolCallsEmitted = true
-				s.sendEvent("response.output_tool_call.done", openaifmt.BuildResponsesToolCallDonePayload(s.responseID, util.FormatOpenAIStreamToolCalls(evt.ToolCalls)))
+				if !s.sendEvent("response.output_tool_call.done", openaifmt.BuildResponsesToolCallDonePayload(s.responseID, util.FormatOpenAIStreamToolCalls(evt.ToolCalls))) {
+					return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested}
+				}
 			}
 		}
 	}

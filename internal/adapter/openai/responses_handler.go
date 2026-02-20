@@ -153,7 +153,10 @@ func (h *Handler) handleResponsesStream(w http.ResponseWriter, r *http.Request, 
 			h.getResponseStore().put(owner, responseID, obj)
 		},
 	)
-	streamRuntime.sendCreated()
+	// If downstream is already closed, runtime marks itself non-writable.
+	// We still enter ConsumeSSE so upstream body is canceled via request context
+	// and account slots are released deterministically.
+	_ = streamRuntime.sendCreated()
 
 	streamengine.ConsumeSSE(streamengine.ConsumeConfig{
 		Context:             r.Context(),
@@ -164,6 +167,9 @@ func (h *Handler) handleResponsesStream(w http.ResponseWriter, r *http.Request, 
 		IdleTimeout:         time.Duration(deepseek.StreamIdleTimeout) * time.Second,
 		MaxKeepAliveNoInput: deepseek.MaxKeepaliveCount,
 	}, streamengine.ConsumeHooks{
+		OnKeepAlive: func() bool {
+			return streamRuntime.sendKeepAlive()
+		},
 		OnParsed: streamRuntime.onParsed,
 		OnFinalize: func(_ streamengine.StopReason, _ error) {
 			streamRuntime.finalize()

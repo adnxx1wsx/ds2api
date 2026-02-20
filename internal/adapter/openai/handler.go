@@ -32,7 +32,9 @@ type Handler struct {
 	DS    DeepSeekCaller
 
 	leaseMu      sync.Mutex
+	leaseSweep   sync.Once
 	streamLeases map[string]streamLease
+	leaseStats   streamLeaseStats
 	responsesMu  sync.Mutex
 	responses    *responseStore
 }
@@ -191,8 +193,8 @@ func (h *Handler) handleStream(w http.ResponseWriter, r *http.Request, resp *htt
 		IdleTimeout:         time.Duration(deepseek.StreamIdleTimeout) * time.Second,
 		MaxKeepAliveNoInput: deepseek.MaxKeepaliveCount,
 	}, streamengine.ConsumeHooks{
-		OnKeepAlive: func() {
-			streamRuntime.sendKeepAlive()
+		OnKeepAlive: func() bool {
+			return streamRuntime.sendKeepAlive()
 		},
 		OnParsed: streamRuntime.onParsed,
 		OnFinalize: func(reason streamengine.StopReason, _ error) {
@@ -354,3 +356,4 @@ func (h *Handler) toolcallEarlyEmitHighConfidence() bool {
 	level := strings.TrimSpace(strings.ToLower(h.Store.ToolcallEarlyEmitConfidence()))
 	return level == "" || level == "high"
 }
+

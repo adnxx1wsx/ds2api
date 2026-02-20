@@ -34,6 +34,10 @@ type PoolController interface {
 	ApplyRuntimeLimits(maxInflightPerAccount, maxQueueSize, globalMaxInflight int)
 }
 
+type StreamLeaseStatsProvider interface {
+	StreamLeaseStats() map[string]any
+}
+
 type DeepSeekCaller interface {
 	Login(ctx context.Context, acc config.Account) (string, error)
 	CreateSession(ctx context.Context, a *auth.RequestAuth, maxAttempts int) (string, error)

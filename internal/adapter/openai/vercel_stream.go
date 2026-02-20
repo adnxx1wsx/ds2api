@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"ds2api/internal/auth"
@@ -17,11 +18,20 @@ import (
 	"ds2api/internal/util"
 )
 
+type streamLeaseStats struct {
+	created         atomic.Uint64
+	released        atomic.Uint64
+	expired         atomic.Uint64
+	releaseNotFound atomic.Uint64
+	sweepRuns       atomic.Uint64
+}
+
 func (h *Handler) handleVercelStreamPrepare(w http.ResponseWriter, r *http.Request) {
 	if !config.IsVercel() {
 		http.NotFound(w, r)
 		return
 	}
+	h.startLeaseSweeper()
 	h.sweepExpiredStreamLeases()
 	internalSecret := vercelInternalSecret()
 	internalToken := strings.TrimSpace(r.Header.Get("X-Ds2-Internal-Token"))
@@ -167,6 +177,7 @@ func (h *Handler) holdStreamLease(a *auth.RequestAuth) string {
 	if a == nil {
 		return ""
 	}
+	h.startLeaseSweeper()
 	now := time.Now()
 	ttl := streamLeaseTTL()
 	if ttl <= 0 {
@@ -183,7 +194,9 @@ func (h *Handler) holdStreamLease(a *auth.RequestAuth) string {
 		Auth:      a,
 		ExpiresAt: now.Add(ttl),
 	}
+	h.leaseStats.created.Add(1)
 	h.leaseMu.Unlock()
+	h.noteExpiredLeases(len(expired))
 	h.releaseExpiredAuths(expired)
 	return leaseID
 }
@@ -201,14 +214,17 @@ func (h *Handler) releaseStreamLease(leaseID string) bool {
 		delete(h.streamLeases, leaseID)
 	}
 	h.leaseMu.Unlock()
+	h.noteExpiredLeases(len(expired))
 	h.releaseExpiredAuths(expired)
 
 	if !ok {
+		h.leaseStats.releaseNotFound.Add(1)
 		return false
 	}
 	if h.Auth != nil {
 		h.Auth.Release(lease.Auth)
 	}
+	h.leaseStats.released.Add(1)
 	return true
 }
 
@@ -236,10 +252,75 @@ func (h *Handler) releaseExpiredAuths(expired []*auth.RequestAuth) {
 }
 
 func (h *Handler) sweepExpiredStreamLeases() {
+	h.leaseStats.sweepRuns.Add(1)
 	h.leaseMu.Lock()
 	expired := h.popExpiredLeasesLocked(time.Now())
 	h.leaseMu.Unlock()
+	h.noteExpiredLeases(len(expired))
 	h.releaseExpiredAuths(expired)
+}
+
+func (h *Handler) noteExpiredLeases(n int) {
+	if h == nil || n <= 0 {
+		return
+	}
+	h.leaseStats.expired.Add(uint64(n))
+}
+
+func (h *Handler) StreamLeaseStats() map[string]any {
+	if h == nil {
+		return map[string]any{
+			"active":                  0,
+			"created_total":           int64(0),
+			"released_total":          int64(0),
+			"expired_total":           int64(0),
+			"release_not_found_total": int64(0),
+			"sweep_runs_total":        int64(0),
+			"estimated_unreleased":    int64(0),
+		}
+	}
+	h.leaseMu.Lock()
+	active := len(h.streamLeases)
+	h.leaseMu.Unlock()
+
+	created := int64(h.leaseStats.created.Load())
+	released := int64(h.leaseStats.released.Load())
+	expired := int64(h.leaseStats.expired.Load())
+	misses := int64(h.leaseStats.releaseNotFound.Load())
+	sweeps := int64(h.leaseStats.sweepRuns.Load())
+
+	estimatedUnreleased := created - released - expired
+	if estimatedUnreleased < 0 {
+		estimatedUnreleased = 0
+	}
+
+	return map[string]any{
+		"active":                  active,
+		"created_total":           created,
+		"released_total":          released,
+		"expired_total":           expired,
+		"release_not_found_total": misses,
+		"sweep_runs_total":        sweeps,
+		"estimated_unreleased":    estimatedUnreleased,
+		"ttl_seconds":             int64(streamLeaseTTL().Seconds()),
+		"sweep_interval_seconds":  int64(streamLeaseSweepInterval().Seconds()),
+	}
+}
+
+func (h *Handler) startLeaseSweeper() {
+	if h == nil {
+		return
+	}
+	h.leaseSweep.Do(func() {
+		interval := streamLeaseSweepInterval()
+		go func() {
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+			for range ticker.C {
+				h.sweepExpiredStreamLeases()
+			}
+		}()
+	})
 }
 
 func streamLeaseTTL() time.Duration {
@@ -252,6 +333,25 @@ func streamLeaseTTL() time.Duration {
 		return 15 * time.Minute
 	}
 	return time.Duration(seconds) * time.Second
+}
+
+func streamLeaseSweepInterval() time.Duration {
+	raw := strings.TrimSpace(os.Getenv("DS2API_VERCEL_STREAM_LEASE_SWEEP_SECONDS"))
+	if raw != "" {
+		seconds, err := strconv.Atoi(raw)
+		if err == nil && seconds > 0 {
+			return time.Duration(seconds) * time.Second
+		}
+	}
+	ttl := streamLeaseTTL()
+	interval := ttl / 4
+	if interval < 5*time.Second {
+		interval = 5 * time.Second
+	}
+	if interval > time.Minute {
+		interval = time.Minute
+	}
+	return interval
 }
 
 func newLeaseID() string {

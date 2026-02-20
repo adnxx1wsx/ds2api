@@ -44,7 +44,7 @@ func NewApp() *App {
 
 	openaiHandler := &openai.Handler{Store: store, Auth: resolver, DS: dsClient}
 	claudeHandler := &claude.Handler{Store: store, Auth: resolver, DS: dsClient}
-	adminHandler := &admin.Handler{Store: store, Pool: pool, DS: dsClient}
+	adminHandler := &admin.Handler{Store: store, Pool: pool, LeaseStats: openaiHandler, DS: dsClient}
 	webuiHandler := webui.NewHandler()
 
 	r := chi.NewRouter()

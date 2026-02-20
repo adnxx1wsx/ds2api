@@ -37,7 +37,7 @@ type ParsedDecision struct {
 
 type ConsumeHooks struct {
 	OnParsed      func(parsed sse.LineResult) ParsedDecision
-	OnKeepAlive   func()
+	OnKeepAlive   func() bool
 	OnFinalize    func(reason StopReason, scannerErr error)
 	OnContextDone func()
 }
@@ -92,7 +92,10 @@ func ConsumeSSE(cfg ConsumeConfig, hooks ConsumeHooks) {
 				return
 			}
 			if hooks.OnKeepAlive != nil {
-				hooks.OnKeepAlive()
+				if !hooks.OnKeepAlive() {
+					finalize(StopReasonHandlerRequested, nil)
+					return
+				}
 			}
 		case parsed, ok := <-parsedLines:
 			if !ok {

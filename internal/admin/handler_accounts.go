@@ -121,7 +121,11 @@ func (h *Handler) deleteAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) queueStatus(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, h.Pool.Status())
+	status := h.Pool.Status()
+	if h.LeaseStats != nil {
+		status["stream_leases"] = h.LeaseStats.StreamLeaseStats()
+	}
+	writeJSON(w, http.StatusOK, status)
 }
 
 func (h *Handler) testSingleAccount(w http.ResponseWriter, r *http.Request) {

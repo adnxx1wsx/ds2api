@@ -5,9 +5,10 @@ import (
 )
 
 type Handler struct {
-	Store ConfigStore
-	Pool  PoolController
-	DS    DeepSeekCaller
+	Store      ConfigStore
+	Pool       PoolController
+	LeaseStats StreamLeaseStatsProvider
+	DS         DeepSeekCaller
 }
 
 func RegisterRoutes(r chi.Router, h *Handler) {

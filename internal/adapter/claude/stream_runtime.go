@@ -16,6 +16,7 @@ type claudeStreamRuntime struct {
 	w        http.ResponseWriter
 	rc       *http.ResponseController
 	canFlush bool
+	writable bool
 
 	model     string
 	toolNames []string
@@ -52,6 +53,7 @@ func newClaudeStreamRuntime(
 		w:                  w,
 		rc:                 rc,
 		canFlush:           canFlush,
+		writable:           true,
 		model:              model,
 		messages:           messages,
 		thinkingEnabled:    thinkingEnabled,
@@ -64,20 +66,48 @@ func newClaudeStreamRuntime(
 	}
 }
 
-func (s *claudeStreamRuntime) send(event string, v any) {
-	b, _ := json.Marshal(v)
-	_, _ = s.w.Write([]byte("event: "))
-	_, _ = s.w.Write([]byte(event))
-	_, _ = s.w.Write([]byte("\n"))
-	_, _ = s.w.Write([]byte("data: "))
-	_, _ = s.w.Write(b)
-	_, _ = s.w.Write([]byte("\n\n"))
-	if s.canFlush {
-		_ = s.rc.Flush()
+func (s *claudeStreamRuntime) send(event string, v any) bool {
+	if !s.writable {
+		return false
 	}
+	b, _ := json.Marshal(v)
+	if _, err := s.w.Write([]byte("event: ")); err != nil {
+		s.writable = false
+		return false
+	}
+	if _, err := s.w.Write([]byte(event)); err != nil {
+		s.writable = false
+		return false
+	}
+	if _, err := s.w.Write([]byte("\n")); err != nil {
+		s.writable = false
+		return false
+	}
+	if _, err := s.w.Write([]byte("data: ")); err != nil {
+		s.writable = false
+		return false
+	}
+	if _, err := s.w.Write(b); err != nil {
+		s.writable = false
+		return false
+	}
+	if _, err := s.w.Write([]byte("\n\n")); err != nil {
+		s.writable = false
+		return false
+	}
+	if s.canFlush {
+		if err := s.rc.Flush(); err != nil {
+			s.writable = false
+			return false
+		}
+	}
+	return true
 }
 
 func (s *claudeStreamRuntime) sendError(message string) {
+	if !s.writable {
+		return
+	}
 	msg := strings.TrimSpace(message)
 	if msg == "" {
 		msg = "upstream stream error"
@@ -93,13 +123,13 @@ func (s *claudeStreamRuntime) sendError(message string) {
 	})
 }
 
-func (s *claudeStreamRuntime) sendPing() {
-	s.send("ping", map[string]any{"type": "ping"})
+func (s *claudeStreamRuntime) sendPing() bool {
+	return s.send("ping", map[string]any{"type": "ping"})
 }
 
-func (s *claudeStreamRuntime) sendMessageStart() {
+func (s *claudeStreamRuntime) sendMessageStart() bool {
 	inputTokens := util.EstimateTokens(fmt.Sprintf("%v", s.messages))
-	s.send("message_start", map[string]any{
+	return s.send("message_start", map[string]any{
 		"type": "message_start",
 		"message": map[string]any{
 			"id":            s.messageID,
@@ -118,10 +148,12 @@ func (s *claudeStreamRuntime) closeThinkingBlock() {
 	if !s.thinkingBlockOpen {
 		return
 	}
-	s.send("content_block_stop", map[string]any{
+	if !s.send("content_block_stop", map[string]any{
 		"type":  "content_block_stop",
 		"index": s.thinkingBlockIndex,
-	})
+	}) {
+		return
+	}
 	s.thinkingBlockOpen = false
 	s.thinkingBlockIndex = -1
 }
@@ -130,16 +162,18 @@ func (s *claudeStreamRuntime) closeTextBlock() {
 	if !s.textBlockOpen {
 		return
 	}
-	s.send("content_block_stop", map[string]any{
+	if !s.send("content_block_stop", map[string]any{
 		"type":  "content_block_stop",
 		"index": s.textBlockIndex,
-	})
+	}) {
+		return
+	}
 	s.textBlockOpen = false
 	s.textBlockIndex = -1
 }
 
 func (s *claudeStreamRuntime) finalize(stopReason string) {
-	if s.ended {
+	if s.ended || !s.writable {
 		return
 	}
 	s.ended = true
@@ -156,7 +190,7 @@ func (s *claudeStreamRuntime) finalize(stopReason string) {
 			stopReason = "tool_use"
 			for i, tc := range detected {
 				idx := s.nextBlockIndex + i
-				s.send("content_block_start", map[string]any{
+				if !s.send("content_block_start", map[string]any{
 					"type":  "content_block_start",
 					"index": idx,
 					"content_block": map[string]any{
@@ -165,41 +199,51 @@ func (s *claudeStreamRuntime) finalize(stopReason string) {
 						"name":  tc.Name,
 						"input": tc.Input,
 					},
-				})
-				s.send("content_block_stop", map[string]any{
+				}) {
+					return
+				}
+				if !s.send("content_block_stop", map[string]any{
 					"type":  "content_block_stop",
 					"index": idx,
-				})
+				}) {
+					return
+				}
 			}
 			s.nextBlockIndex += len(detected)
 		} else if finalText != "" {
 			idx := s.nextBlockIndex
 			s.nextBlockIndex++
-			s.send("content_block_start", map[string]any{
+			if !s.send("content_block_start", map[string]any{
 				"type":  "content_block_start",
 				"index": idx,
 				"content_block": map[string]any{
 					"type": "text",
 					"text": "",
 				},
-			})
-			s.send("content_block_delta", map[string]any{
+			}) {
+				return
+			}
+			if !s.send("content_block_delta", map[string]any{
 				"type":  "content_block_delta",
 				"index": idx,
 				"delta": map[string]any{
 					"type": "text_delta",
 					"text": finalText,
 				},
-			})
-			s.send("content_block_stop", map[string]any{
+			}) {
+				return
+			}
+			if !s.send("content_block_stop", map[string]any{
 				"type":  "content_block_stop",
 				"index": idx,
-			})
+			}) {
+				return
+			}
 		}
 	}
 
 	outputTokens := util.EstimateTokens(finalThinking) + util.EstimateTokens(finalText)
-	s.send("message_delta", map[string]any{
+	if !s.send("message_delta", map[string]any{
 		"type": "message_delta",
 		"delta": map[string]any{
 			"stop_reason":   stopReason,
@@ -208,11 +252,16 @@ func (s *claudeStreamRuntime) finalize(stopReason string) {
 		"usage": map[string]any{
 			"output_tokens": outputTokens,
 		},
-	})
+	}) {
+		return
+	}
 	s.send("message_stop", map[string]any{"type": "message_stop"})
 }
 
 func (s *claudeStreamRuntime) onParsed(parsed sse.LineResult) streamengine.ParsedDecision {
+	if !s.writable {
+		return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested}
+	}
 	if !parsed.Parsed {
 		return streamengine.ParsedDecision{}
 	}
@@ -243,24 +292,28 @@ func (s *claudeStreamRuntime) onParsed(parsed sse.LineResult) streamengine.Parse
 			if !s.thinkingBlockOpen {
 				s.thinkingBlockIndex = s.nextBlockIndex
 				s.nextBlockIndex++
-				s.send("content_block_start", map[string]any{
+				if !s.send("content_block_start", map[string]any{
 					"type":  "content_block_start",
 					"index": s.thinkingBlockIndex,
 					"content_block": map[string]any{
 						"type":     "thinking",
 						"thinking": "",
 					},
-				})
+				}) {
+					return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested}
+				}
 				s.thinkingBlockOpen = true
 			}
-			s.send("content_block_delta", map[string]any{
+			if !s.send("content_block_delta", map[string]any{
 				"type":  "content_block_delta",
 				"index": s.thinkingBlockIndex,
 				"delta": map[string]any{
 					"type":     "thinking_delta",
 					"thinking": p.Text,
 				},
-			})
+			}) {
+				return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested}
+			}
 			continue
 		}
 
@@ -272,24 +325,28 @@ func (s *claudeStreamRuntime) onParsed(parsed sse.LineResult) streamengine.Parse
 		if !s.textBlockOpen {
 			s.textBlockIndex = s.nextBlockIndex
 			s.nextBlockIndex++
-			s.send("content_block_start", map[string]any{
+			if !s.send("content_block_start", map[string]any{
 				"type":  "content_block_start",
 				"index": s.textBlockIndex,
 				"content_block": map[string]any{
 					"type": "text",
 					"text": "",
 				},
-			})
+			}) {
+				return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested}
+			}
 			s.textBlockOpen = true
 		}
-		s.send("content_block_delta", map[string]any{
+		if !s.send("content_block_delta", map[string]any{
 			"type":  "content_block_delta",
 			"index": s.textBlockIndex,
 			"delta": map[string]any{
 				"type": "text_delta",
 				"text": p.Text,
 			},
-		})
+		}) {
+			return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested}
+		}
 	}
 
 	return streamengine.ParsedDecision{ContentSeen: contentSeen}

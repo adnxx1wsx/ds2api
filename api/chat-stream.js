@@ -84,6 +84,8 @@ module.exports = async function handler(req, res) {
       return;
     }
     clientClosed = true;
+    // Release account lease as early as possible when downstream disconnects.
+    Promise.resolve(releaseLease()).catch(() => {});
     upstreamController.abort();
     if (reader && typeof reader.cancel === 'function') {
       Promise.resolve(reader.cancel()).catch(() => {});
@@ -490,18 +492,31 @@ async function releaseStreamLease(req, leaseID) {
   url.searchParams.set('__stream_release', '1');
   const body = Buffer.from(JSON.stringify({ lease_id: leaseID }));
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 1500);
-  try {
-    await fetch(url.toString(), {
-      method: 'POST',
-      headers: buildInternalGoHeaders(req, { withInternalToken: true, withContentType: true }),
-      body,
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timeout);
+  const timeouts = [1500, 2500, 3500];
+  for (let i = 0; i < timeouts.length; i += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeouts[i]);
+    try {
+      const resp = await fetch(url.toString(), {
+        method: 'POST',
+        headers: buildInternalGoHeaders(req, { withInternalToken: true, withContentType: true }),
+        body,
+        signal: controller.signal,
+      });
+      if (resp && resp.ok) {
+        return;
+      }
+    } catch (_err) {
+      // retry
+    } finally {
+      clearTimeout(timeout);
+    }
+    await sleep(100 * (i + 1));
   }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function resolveProtectionBypass(req) {

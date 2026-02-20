@@ -116,15 +116,29 @@ func formatToolResultForPrompt(msg map[string]any) string {
 
 	name := strings.TrimSpace(asString(msg["name"]))
 	if name == "" {
+		name = strings.TrimSpace(asString(msg["tool_name"]))
+	}
+	if name == "" {
 		name = "unknown"
 	}
 
 	content := normalizeOpenAIContentForPrompt(msg["content"])
-	if content == "" {
+	if isEmptyPromptContent(content) {
+		content = normalizeOpenAIContentForPrompt(msg["output"])
+	}
+	if isEmptyPromptContent(content) {
+		content = normalizeOpenAIContentForPrompt(msg["result"])
+	}
+	if isEmptyPromptContent(content) {
 		content = "null"
 	}
 
 	return fmt.Sprintf("Tool result:\n- tool_call_id: %s\n- name: %s\n- content: %s", toolCallID, name, content)
+}
+
+func isEmptyPromptContent(s string) bool {
+	trimmed := strings.TrimSpace(s)
+	return trimmed == "" || trimmed == "null" || trimmed == "[]"
 }
 
 func normalizeOpenAIContentForPrompt(v any) string {
@@ -134,21 +148,48 @@ func normalizeOpenAIContentForPrompt(v any) string {
 	case []any:
 		parts := make([]string, 0, len(x))
 		for _, item := range x {
-			m, ok := item.(map[string]any)
-			if !ok {
+			switch block := item.(type) {
+			case string:
+				if strings.TrimSpace(block) != "" {
+					parts = append(parts, block)
+				}
+				continue
+			case map[string]any:
+				t := strings.ToLower(strings.TrimSpace(asString(block["type"])))
+
+				if text := asString(block["text"]); text != "" {
+					parts = append(parts, text)
+					continue
+				}
+				if content := asString(block["content"]); content != "" {
+					parts = append(parts, content)
+					continue
+				}
+				if rawContent, exists := block["content"]; exists && rawContent != nil {
+					if nested := normalizeOpenAIContentForPrompt(rawContent); strings.TrimSpace(nested) != "" {
+						parts = append(parts, nested)
+					} else {
+						parts = append(parts, marshalToPromptString(rawContent))
+					}
+					continue
+				}
+				if out := normalizeOpenAIContentForPrompt(block["output"]); strings.TrimSpace(out) != "" {
+					parts = append(parts, out)
+					continue
+				}
+				// Keep unknown content blocks instead of dropping them silently.
+				if t == "" || t == "text" || t == "output_text" || t == "input_text" || t == "tool_result" || t == "tool_output" {
+					continue
+				}
+				parts = append(parts, marshalToPromptString(block))
 				continue
 			}
-			t := strings.ToLower(strings.TrimSpace(asString(m["type"])))
-			if t != "text" && t != "output_text" && t != "input_text" {
-				continue
+			if item != nil {
+				parts = append(parts, marshalToPromptString(item))
 			}
-			if text := asString(m["text"]); text != "" {
-				parts = append(parts, text)
-				continue
-			}
-			if text := asString(m["content"]); text != "" {
-				parts = append(parts, text)
-			}
+		}
+		if len(parts) == 0 {
+			return ""
 		}
 		return strings.Join(parts, "\n")
 	default:

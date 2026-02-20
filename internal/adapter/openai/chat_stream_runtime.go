@@ -15,6 +15,7 @@ type chatStreamRuntime struct {
 	w        http.ResponseWriter
 	rc       *http.ResponseController
 	canFlush bool
+	writable bool
 
 	completionID string
 	created      int64
@@ -54,6 +55,7 @@ func newChatStreamRuntime(
 		w:                   w,
 		rc:                  rc,
 		canFlush:            canFlush,
+		writable:            true,
 		completionID:        completionID,
 		created:             created,
 		model:               model,
@@ -67,32 +69,71 @@ func newChatStreamRuntime(
 	}
 }
 
-func (s *chatStreamRuntime) sendKeepAlive() {
+func (s *chatStreamRuntime) sendKeepAlive() bool {
+	if !s.writable {
+		return false
+	}
 	if !s.canFlush {
-		return
+		return true
 	}
-	_, _ = s.w.Write([]byte(": keep-alive\n\n"))
-	_ = s.rc.Flush()
+	if _, err := s.w.Write([]byte(": keep-alive\n\n")); err != nil {
+		s.writable = false
+		return false
+	}
+	if err := s.rc.Flush(); err != nil {
+		s.writable = false
+		return false
+	}
+	return true
 }
 
-func (s *chatStreamRuntime) sendChunk(v any) {
+func (s *chatStreamRuntime) sendChunk(v any) bool {
+	if !s.writable {
+		return false
+	}
 	b, _ := json.Marshal(v)
-	_, _ = s.w.Write([]byte("data: "))
-	_, _ = s.w.Write(b)
-	_, _ = s.w.Write([]byte("\n\n"))
-	if s.canFlush {
-		_ = s.rc.Flush()
+	if _, err := s.w.Write([]byte("data: ")); err != nil {
+		s.writable = false
+		return false
 	}
+	if _, err := s.w.Write(b); err != nil {
+		s.writable = false
+		return false
+	}
+	if _, err := s.w.Write([]byte("\n\n")); err != nil {
+		s.writable = false
+		return false
+	}
+	if s.canFlush {
+		if err := s.rc.Flush(); err != nil {
+			s.writable = false
+			return false
+		}
+	}
+	return true
 }
 
-func (s *chatStreamRuntime) sendDone() {
-	_, _ = s.w.Write([]byte("data: [DONE]\n\n"))
-	if s.canFlush {
-		_ = s.rc.Flush()
+func (s *chatStreamRuntime) sendDone() bool {
+	if !s.writable {
+		return false
 	}
+	if _, err := s.w.Write([]byte("data: [DONE]\n\n")); err != nil {
+		s.writable = false
+		return false
+	}
+	if s.canFlush {
+		if err := s.rc.Flush(); err != nil {
+			s.writable = false
+			return false
+		}
+	}
+	return true
 }
 
 func (s *chatStreamRuntime) finalize(finishReason string) {
+	if !s.writable {
+		return
+	}
 	finalThinking := s.thinking.String()
 	finalText := s.text.String()
 	detected := util.ParseToolCalls(finalText, s.toolNames)
@@ -105,13 +146,15 @@ func (s *chatStreamRuntime) finalize(finishReason string) {
 			delta["role"] = "assistant"
 			s.firstChunkSent = true
 		}
-		s.sendChunk(openaifmt.BuildChatStreamChunk(
+		if !s.sendChunk(openaifmt.BuildChatStreamChunk(
 			s.completionID,
 			s.created,
 			s.model,
 			[]map[string]any{openaifmt.BuildChatStreamDeltaChoice(0, delta)},
 			nil,
-		))
+		)) {
+			return
+		}
 	} else if s.bufferToolContent {
 		for _, evt := range flushToolSieve(&s.toolSieve, s.toolNames) {
 			if evt.Content == "" {
@@ -124,30 +167,37 @@ func (s *chatStreamRuntime) finalize(finishReason string) {
 				delta["role"] = "assistant"
 				s.firstChunkSent = true
 			}
-			s.sendChunk(openaifmt.BuildChatStreamChunk(
+			if !s.sendChunk(openaifmt.BuildChatStreamChunk(
 				s.completionID,
 				s.created,
 				s.model,
 				[]map[string]any{openaifmt.BuildChatStreamDeltaChoice(0, delta)},
 				nil,
-			))
+			)) {
+				return
+			}
 		}
 	}
 
 	if len(detected) > 0 || s.toolCallsEmitted {
 		finishReason = "tool_calls"
 	}
-	s.sendChunk(openaifmt.BuildChatStreamChunk(
+	if !s.sendChunk(openaifmt.BuildChatStreamChunk(
 		s.completionID,
 		s.created,
 		s.model,
 		[]map[string]any{openaifmt.BuildChatStreamFinishChoice(0, finishReason)},
 		openaifmt.BuildChatUsage(s.finalPrompt, finalThinking, finalText),
-	))
+	)) {
+		return
+	}
 	s.sendDone()
 }
 
 func (s *chatStreamRuntime) onParsed(parsed sse.LineResult) streamengine.ParsedDecision {
+	if !s.writable {
+		return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested}
+	}
 	if !parsed.Parsed {
 		return streamengine.ParsedDecision{}
 	}
@@ -231,7 +281,9 @@ func (s *chatStreamRuntime) onParsed(parsed sse.LineResult) streamengine.ParsedD
 	}
 
 	if len(newChoices) > 0 {
-		s.sendChunk(openaifmt.BuildChatStreamChunk(s.completionID, s.created, s.model, newChoices, nil))
+		if !s.sendChunk(openaifmt.BuildChatStreamChunk(s.completionID, s.created, s.model, newChoices, nil)) {
+			return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested}
+		}
 	}
 	return streamengine.ParsedDecision{ContentSeen: contentSeen}
 }

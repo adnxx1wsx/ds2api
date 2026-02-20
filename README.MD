@@ -1,217 +1,217 @@
-# DS2API
+﻿# DS2API
 
 [![License](https://img.shields.io/github/license/CJackHwang/ds2api.svg)](LICENSE)
 ![Stars](https://img.shields.io/github/stars/CJackHwang/ds2api.svg)
 ![Forks](https://img.shields.io/github/forks/CJackHwang/ds2api.svg)
-[![Version](https://img.shields.io/badge/version-1.6.11-blue.svg)](version.txt)
+[![Version](https://img.shields.io/badge/version-1.6.12-blue.svg)](version.txt)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](DEPLOY.md)
 
-语言 / Language: [中文](README.MD) | [English](README.en.md)
+璇█ / Language: [涓枃](README.MD) | [English](README.en.md)
 
-将 DeepSeek Web 对话能力转换为 OpenAI 与 Claude 兼容 API。后端为 **Go 全量实现**，前端为 React WebUI 管理台（源码在 `webui/`，部署时自动构建到 `static/admin`）。
+灏?DeepSeek Web 瀵硅瘽鑳藉姏杞崲涓?OpenAI 涓?Claude 鍏煎 API銆傚悗绔负 **Go 鍏ㄩ噺瀹炵幇**锛屽墠绔负 React WebUI 绠＄悊鍙帮紙婧愮爜鍦?`webui/`锛岄儴缃叉椂鑷姩鏋勫缓鍒?`static/admin`锛夈€?
 
-## 架构概览
+## 鏋舵瀯姒傝
 
 ```mermaid
 flowchart LR
-    Client["🖥️ 客户端\n(OpenAI / Claude 兼容)"]
+    Client["馃枼锔?瀹㈡埛绔痋n(OpenAI / Claude 鍏煎)"]
 
-    subgraph DS2API["DS2API 服务"]
+    subgraph DS2API["DS2API 鏈嶅姟"]
         direction TB
-        CORS["CORS 中间件"]
-        Auth["🔐 鉴权中间件"]
+        CORS["CORS 涓棿浠?]
+        Auth["馃攼 閴存潈涓棿浠?]
 
-        subgraph Adapters["适配器层"]
-            OA["OpenAI 适配器\n/v1/*"]
-            CA["Claude 适配器\n/anthropic/*"]
+        subgraph Adapters["閫傞厤鍣ㄥ眰"]
+            OA["OpenAI 閫傞厤鍣╘n/v1/*"]
+            CA["Claude 閫傞厤鍣╘n/anthropic/*"]
         end
 
-        subgraph Support["支撑模块"]
-            Pool["📦 账号池 / 并发队列"]
-            PoW["⚙️ PoW WASM\n(wazero)"]
+        subgraph Support["鏀拺妯″潡"]
+            Pool["馃摝 璐﹀彿姹?/ 骞跺彂闃熷垪"]
+            PoW["鈿欙笍 PoW WASM\n(wazero)"]
         end
 
-        Admin["🛠️ Admin API\n/admin/*"]
-        WebUI["🌐 WebUI\n(/admin)"]
+        Admin["馃洜锔?Admin API\n/admin/*"]
+        WebUI["馃寪 WebUI\n(/admin)"]
     end
 
-    DS["☁️ DeepSeek API"]
+    DS["鈽侊笍 DeepSeek API"]
 
-    Client -- "请求" --> CORS --> Auth
+    Client -- "璇锋眰" --> CORS --> Auth
     Auth --> OA & CA
-    OA & CA -- "调用" --> DS
+    OA & CA -- "璋冪敤" --> DS
     Auth --> Admin
-    OA & CA -. "轮询选账号" .-> Pool
-    OA & CA -. "计算 PoW" .-> PoW
-    DS -- "响应" --> Client
+    OA & CA -. "杞閫夎处鍙? .-> Pool
+    OA & CA -. "璁＄畻 PoW" .-> PoW
+    DS -- "鍝嶅簲" --> Client
 ```
 
-- **后端**：Go（`cmd/ds2api/`、`api/`、`internal/`），不依赖 Python 运行时
-- **前端**：React 管理台（`webui/`），运行时托管静态构建产物
-- **部署**：本地运行、Docker、Vercel Serverless、Linux systemd
+- **鍚庣**锛欸o锛坄cmd/ds2api/`銆乣api/`銆乣internal/`锛夛紝涓嶄緷璧?Python 杩愯鏃?
+- **鍓嶇**锛歊eact 绠＄悊鍙帮紙`webui/`锛夛紝杩愯鏃舵墭绠￠潤鎬佹瀯寤轰骇鐗?
+- **閮ㄧ讲**锛氭湰鍦拌繍琛屻€丏ocker銆乂ercel Serverless銆丩inux systemd
 
-## 核心能力
+## 鏍稿績鑳藉姏
 
-| 能力 | 说明 |
+| 鑳藉姏 | 璇存槑 |
 | --- | --- |
-| OpenAI 兼容 | `GET /v1/models`、`GET /v1/models/{id}`、`POST /v1/chat/completions`、`POST /v1/responses`、`GET /v1/responses/{response_id}`、`POST /v1/embeddings` |
-| Claude 兼容 | `GET /anthropic/v1/models`、`POST /anthropic/v1/messages`、`POST /anthropic/v1/messages/count_tokens` |
-| 多账号轮询 | 自动 token 刷新、邮箱/手机号双登录方式 |
-| 并发队列控制 | 每账号 in-flight 上限 + 等待队列，动态计算建议并发值 |
-| DeepSeek PoW | WASM 计算（`wazero`），无需外部 Node.js 依赖 |
-| Tool Calling | 防泄漏处理：非代码块高置信特征识别、`delta.tool_calls` 早发、结构化增量输出 |
-| Admin API | 配置管理、账号测试 / 批量测试、导入导出、Vercel 同步 |
-| WebUI 管理台 | `/admin` 单页应用（中英文双语、深色模式） |
-| 运维探针 | `GET /healthz`（存活）、`GET /readyz`（就绪） |
+| OpenAI 鍏煎 | `GET /v1/models`銆乣GET /v1/models/{id}`銆乣POST /v1/chat/completions`銆乣POST /v1/responses`銆乣GET /v1/responses/{response_id}`銆乣POST /v1/embeddings` |
+| Claude 鍏煎 | `GET /anthropic/v1/models`銆乣POST /anthropic/v1/messages`銆乣POST /anthropic/v1/messages/count_tokens` |
+| 澶氳处鍙疯疆璇?| 鑷姩 token 鍒锋柊銆侀偖绠?鎵嬫満鍙峰弻鐧诲綍鏂瑰紡 |
+| 骞跺彂闃熷垪鎺у埗 | 姣忚处鍙?in-flight 涓婇檺 + 绛夊緟闃熷垪锛屽姩鎬佽绠楀缓璁苟鍙戝€?|
+| DeepSeek PoW | WASM 璁＄畻锛坄wazero`锛夛紝鏃犻渶澶栭儴 Node.js 渚濊禆 |
+| Tool Calling | 闃叉硠婕忓鐞嗭細闈炰唬鐮佸潡楂樼疆淇＄壒寰佽瘑鍒€乣delta.tool_calls` 鏃╁彂銆佺粨鏋勫寲澧為噺杈撳嚭 |
+| Admin API | 閰嶇疆绠＄悊銆佽处鍙锋祴璇?/ 鎵归噺娴嬭瘯銆佸鍏ュ鍑恒€乂ercel 鍚屾 |
+| WebUI 绠＄悊鍙?| `/admin` 鍗曢〉搴旂敤锛堜腑鑻辨枃鍙岃銆佹繁鑹叉ā寮忥級 |
+| 杩愮淮鎺㈤拡 | `GET /healthz`锛堝瓨娲伙級銆乣GET /readyz`锛堝氨缁級 |
 
-## 平台兼容矩阵
+## 骞冲彴鍏煎鐭╅樀
 
-| 级别 | 平台 | 当前状态 |
+| 绾у埆 | 骞冲彴 | 褰撳墠鐘舵€?|
 | --- | --- | --- |
-| P0 | Codex CLI/SDK（`wire_api=chat` / `wire_api=responses`） | ✅ |
-| P0 | OpenAI SDK（JS/Python，chat + responses） | ✅ |
-| P0 | Vercel AI SDK（openai-compatible） | ✅ |
-| P0 | Anthropic SDK（messages） | ✅ |
-| P1 | LangChain / LlamaIndex / OpenWebUI（OpenAI 兼容接入） | ✅ |
-| P2 | MCP 独立桥接层 | 规划中 |
+| P0 | Codex CLI/SDK锛坄wire_api=chat` / `wire_api=responses`锛?| 鉁?|
+| P0 | OpenAI SDK锛圝S/Python锛宑hat + responses锛?| 鉁?|
+| P0 | Vercel AI SDK锛坥penai-compatible锛?| 鉁?|
+| P0 | Anthropic SDK锛坢essages锛?| 鉁?|
+| P1 | LangChain / LlamaIndex / OpenWebUI锛圤penAI 鍏煎鎺ュ叆锛?| 鉁?|
+| P2 | MCP 鐙珛妗ユ帴灞?| 瑙勫垝涓?|
 
-## 模型支持
+## 妯″瀷鏀寔
 
-### OpenAI 接口
+### OpenAI 鎺ュ彛
 
-| 模型 | thinking | search |
+| 妯″瀷 | thinking | search |
 | --- | --- | --- |
-| `deepseek-chat` | ❌ | ❌ |
-| `deepseek-reasoner` | ✅ | ❌ |
-| `deepseek-chat-search` | ❌ | ✅ |
-| `deepseek-reasoner-search` | ✅ | ✅ |
+| `deepseek-chat` | 鉂?| 鉂?|
+| `deepseek-reasoner` | 鉁?| 鉂?|
+| `deepseek-chat-search` | 鉂?| 鉁?|
+| `deepseek-reasoner-search` | 鉁?| 鉁?|
 
-### Claude 接口
+### Claude 鎺ュ彛
 
-| 模型 | 默认映射 |
+| 妯″瀷 | 榛樿鏄犲皠 |
 | --- | --- |
 | `claude-sonnet-4-5` | `deepseek-chat` |
-| `claude-haiku-4-5`（兼容 `claude-3-5-haiku-latest`） | `deepseek-chat` |
+| `claude-haiku-4-5`锛堝吋瀹?`claude-3-5-haiku-latest`锛?| `deepseek-chat` |
 | `claude-opus-4-6` | `deepseek-reasoner` |
 
-可通过配置中的 `claude_mapping` 或 `claude_model_mapping` 覆盖映射关系。
-另外，`/anthropic/v1/models` 现已包含 Claude 1.x/2.x/3.x/4.x 历史模型 ID 与常见别名，便于旧客户端直接兼容。
+鍙€氳繃閰嶇疆涓殑 `claude_mapping` 鎴?`claude_model_mapping` 瑕嗙洊鏄犲皠鍏崇郴銆?
+鍙﹀锛宍/anthropic/v1/models` 鐜板凡鍖呭惈 Claude 1.x/2.x/3.x/4.x 鍘嗗彶妯″瀷 ID 涓庡父瑙佸埆鍚嶏紝渚夸簬鏃у鎴风鐩存帴鍏煎銆?
 
-## 快速开始
+## 蹇€熷紑濮?
 
-### 通用第一步（所有部署方式）
+### 閫氱敤绗竴姝ワ紙鎵€鏈夐儴缃叉柟寮忥級
 
-把 `config.json` 作为唯一配置源（推荐做法）：
+鎶?`config.json` 浣滀负鍞竴閰嶇疆婧愶紙鎺ㄨ崘鍋氭硶锛夛細
 
 ```bash
 cp config.example.json config.json
-# 编辑 config.json
+# 缂栬緫 config.json
 ```
 
-后续部署建议：
-- 本地运行：直接读取 `config.json`
-- Docker / Vercel：由 `config.json` 生成 `DS2API_CONFIG_JSON`（Base64）注入环境变量
+鍚庣画閮ㄧ讲寤鸿锛?
+- 鏈湴杩愯锛氱洿鎺ヨ鍙?`config.json`
+- Docker / Vercel锛氱敱 `config.json` 鐢熸垚 `DS2API_CONFIG_JSON`锛圔ase64锛夋敞鍏ョ幆澧冨彉閲?
 
-### 方式一：本地运行
+### 鏂瑰紡涓€锛氭湰鍦拌繍琛?
 
-**前置要求**：Go 1.24+，Node.js 20+（仅在需要构建 WebUI 时）
+**鍓嶇疆瑕佹眰**锛欸o 1.24+锛孨ode.js 20+锛堜粎鍦ㄩ渶瑕佹瀯寤?WebUI 鏃讹級
 
 ```bash
-# 1. 克隆仓库
+# 1. 鍏嬮殕浠撳簱
 git clone https://github.com/CJackHwang/ds2api.git
 cd ds2api
 
-# 2. 配置
+# 2. 閰嶇疆
 cp config.example.json config.json
-# 编辑 config.json，填入你的 DeepSeek 账号信息和 API key
+# 缂栬緫 config.json锛屽～鍏ヤ綘鐨?DeepSeek 璐﹀彿淇℃伅鍜?API key
 
-# 3. 启动
+# 3. 鍚姩
 go run ./cmd/ds2api
 ```
 
-默认监听地址：`http://localhost:5001`
+榛樿鐩戝惉鍦板潃锛歚http://localhost:5001`
 
-> **WebUI 自动构建**：本地首次启动时，若 `static/admin` 不存在，会自动尝试执行 `npm install && npm run build`（需要本机有 Node.js）。你也可以手动构建：`./scripts/build-webui.sh`
+> **WebUI 鑷姩鏋勫缓**锛氭湰鍦伴娆″惎鍔ㄦ椂锛岃嫢 `static/admin` 涓嶅瓨鍦紝浼氳嚜鍔ㄥ皾璇曟墽琛?`npm install && npm run build`锛堥渶瑕佹湰鏈烘湁 Node.js锛夈€備綘涔熷彲浠ユ墜鍔ㄦ瀯寤猴細`./scripts/build-webui.sh`
 
-### 方式二：Docker 运行
+### 鏂瑰紡浜岋細Docker 杩愯
 
 ```bash
-# 1. 准备环境变量文件
+# 1. 鍑嗗鐜鍙橀噺鏂囦欢
 cp .env.example .env
 
-# 2. 从 config.json 生成 DS2API_CONFIG_JSON（单行 Base64）
+# 2. 浠?config.json 鐢熸垚 DS2API_CONFIG_JSON锛堝崟琛?Base64锛?
 DS2API_CONFIG_JSON="$(base64 < config.json | tr -d '\n')"
 
-# 3. 编辑 .env，设置：
-#    DS2API_ADMIN_KEY=请替换为强密码
+# 3. 缂栬緫 .env锛岃缃細
+#    DS2API_ADMIN_KEY=璇锋浛鎹负寮哄瘑鐮?
 #    DS2API_CONFIG_JSON=${DS2API_CONFIG_JSON}
 
-# 4. 启动
+# 4. 鍚姩
 docker-compose up -d
 
-# 5. 查看日志
+# 5. 鏌ョ湅鏃ュ織
 docker-compose logs -f
 ```
 
-更新镜像：`docker-compose up -d --build`
+鏇存柊闀滃儚锛歚docker-compose up -d --build`
 
-### 方式三：Vercel 部署
+### 鏂瑰紡涓夛細Vercel 閮ㄧ讲
 
-1. Fork 仓库到自己的 GitHub
-2. 在 Vercel 上导入项目
-3. 配置环境变量（最少设置 `DS2API_ADMIN_KEY`；推荐同时设置 `DS2API_CONFIG_JSON`）
-4. 部署
+1. Fork 浠撳簱鍒拌嚜宸辩殑 GitHub
+2. 鍦?Vercel 涓婂鍏ラ」鐩?
+3. 閰嶇疆鐜鍙橀噺锛堟渶灏戣缃?`DS2API_ADMIN_KEY`锛涙帹鑽愬悓鏃惰缃?`DS2API_CONFIG_JSON`锛?
+4. 閮ㄧ讲
 
-建议先在仓库目录复制模板并填写：
+寤鸿鍏堝湪浠撳簱鐩綍澶嶅埗妯℃澘骞跺～鍐欙細
 
 ```bash
 cp config.example.json config.json
-# 编辑 config.json
+# 缂栬緫 config.json
 ```
 
-推荐：先本地把 `config.json` 转成 Base64，再粘贴到 `DS2API_CONFIG_JSON`，避免 JSON 格式错误：
+鎺ㄨ崘锛氬厛鏈湴鎶?`config.json` 杞垚 Base64锛屽啀绮樿创鍒?`DS2API_CONFIG_JSON`锛岄伩鍏?JSON 鏍煎紡閿欒锛?
 
 ```bash
 base64 < config.json | tr -d '\n'
 ```
 
-> **流式说明**：`/v1/chat/completions` 在 Vercel 上默认走 `api/chat-stream.js`（Node Runtime）以保证实时 SSE。鉴权、账号选择、会话/PoW 准备仍由 Go 内部 prepare 接口完成；流式响应（含 `tools`）在 Node 侧执行与 Go 对齐的输出组装与防泄漏处理。
+> **娴佸紡璇存槑**锛歚/v1/chat/completions` 鍦?Vercel 涓婇粯璁よ蛋 `api/chat-stream.js`锛圢ode Runtime锛変互淇濊瘉瀹炴椂 SSE銆傞壌鏉冦€佽处鍙烽€夋嫨銆佷細璇?PoW 鍑嗗浠嶇敱 Go 鍐呴儴 prepare 鎺ュ彛瀹屾垚锛涙祦寮忓搷搴旓紙鍚?`tools`锛夊湪 Node 渚ф墽琛屼笌 Go 瀵归綈鐨勮緭鍑虹粍瑁呬笌闃叉硠婕忓鐞嗐€?
 
-详细部署说明请参阅 [部署指南](DEPLOY.md)。
+璇︾粏閮ㄧ讲璇存槑璇峰弬闃?[閮ㄧ讲鎸囧崡](DEPLOY.md)銆?
 
-### 方式四：下载 Release 构建包
+### 鏂瑰紡鍥涳細涓嬭浇 Release 鏋勫缓鍖?
 
-每次发布 Release 时，GitHub Actions 会自动构建多平台二进制包：
+姣忔鍙戝竷 Release 鏃讹紝GitHub Actions 浼氳嚜鍔ㄦ瀯寤哄骞冲彴浜岃繘鍒跺寘锛?
 
 ```bash
-# 下载对应平台的压缩包后
+# 涓嬭浇瀵瑰簲骞冲彴鐨勫帇缂╁寘鍚?
 tar -xzf ds2api_v1.7.0_linux_amd64.tar.gz
 cd ds2api_v1.7.0_linux_amd64
 cp config.example.json config.json
-# 编辑 config.json
+# 缂栬緫 config.json
 ./ds2api
 ```
 
-### 方式五：OpenCode CLI 接入
+### 鏂瑰紡浜旓細OpenCode CLI 鎺ュ叆
 
-1. 复制示例配置：
+1. 澶嶅埗绀轰緥閰嶇疆锛?
 
 ```bash
 cp opencode.json.example opencode.json
 ```
 
-2. 编辑 `opencode.json`：
-- 将 `baseURL` 改为你的 DS2API 地址（例如 `https://your-domain.com/v1`）
-- 将 `apiKey` 改为你的 DS2API key（对应 `config.keys`）
+2. 缂栬緫 `opencode.json`锛?
+- 灏?`baseURL` 鏀逛负浣犵殑 DS2API 鍦板潃锛堜緥濡?`https://your-domain.com/v1`锛?
+- 灏?`apiKey` 鏀逛负浣犵殑 DS2API key锛堝搴?`config.keys`锛?
 
-3. 在项目目录启动 OpenCode CLI（按你的安装方式运行 `opencode`）。
+3. 鍦ㄩ」鐩洰褰曞惎鍔?OpenCode CLI锛堟寜浣犵殑瀹夎鏂瑰紡杩愯 `opencode`锛夈€?
 
-> 建议优先使用 OpenAI 兼容路径（`/v1/*`），即示例里的 `@ai-sdk/openai-compatible` provider。
-> 若客户端支持 `wire_api`，可分别测试 `responses` 与 `chat`，DS2API 两条链路都兼容。
+> 寤鸿浼樺厛浣跨敤 OpenAI 鍏煎璺緞锛坄/v1/*`锛夛紝鍗崇ず渚嬮噷鐨?`@ai-sdk/openai-compatible` provider銆?
+> 鑻ュ鎴风鏀寔 `wire_api`锛屽彲鍒嗗埆娴嬭瘯 `responses` 涓?`chat`锛孌S2API 涓ゆ潯閾捐矾閮藉吋瀹广€?
 
-## 配置说明
+## 閰嶇疆璇存槑
 
-### `config.json` 示例
+### `config.json` 绀轰緥
 
 ```json
 {
@@ -253,139 +253,139 @@ cp opencode.json.example opencode.json
 }
 ```
 
-- `keys`：API 访问密钥列表，客户端通过 `Authorization: Bearer <key>` 鉴权
-- `accounts`：DeepSeek 账号列表，支持 `email` 或 `mobile` 登录
-- `token`：留空则首次请求时自动登录获取；也可预填已有 token
-- `model_aliases`：常见模型名（如 GPT/Codex/Claude）到 DeepSeek 模型的映射
-- `compat.wide_input_strict_output`：建议保持 `true`（当前实现默认宽进严出）
-- `toolcall`：固定采用特征匹配 + 高置信早发策略
-- `responses.store_ttl_seconds`：`/v1/responses/{id}` 的内存缓存 TTL
-- `embeddings.provider`：embedding 提供方（当前内置 `deterministic/mock/builtin`）
-- `claude_model_mapping`：字典中 `fast`/`slow` 后缀映射到对应 DeepSeek 模型
+- `keys`锛欰PI 璁块棶瀵嗛挜鍒楄〃锛屽鎴风閫氳繃 `Authorization: Bearer <key>` 閴存潈
+- `accounts`锛欴eepSeek 璐﹀彿鍒楄〃锛屾敮鎸?`email` 鎴?`mobile` 鐧诲綍
+- `token`锛氱暀绌哄垯棣栨璇锋眰鏃惰嚜鍔ㄧ櫥褰曡幏鍙栵紱涔熷彲棰勫～宸叉湁 token
+- `model_aliases`锛氬父瑙佹ā鍨嬪悕锛堝 GPT/Codex/Claude锛夊埌 DeepSeek 妯″瀷鐨勬槧灏?
+- `compat.wide_input_strict_output`锛氬缓璁繚鎸?`true`锛堝綋鍓嶅疄鐜伴粯璁ゅ杩涗弗鍑猴級
+- `toolcall`锛氬浐瀹氶噰鐢ㄧ壒寰佸尮閰?+ 楂樼疆淇℃棭鍙戠瓥鐣?
+- `responses.store_ttl_seconds`锛歚/v1/responses/{id}` 鐨勫唴瀛樼紦瀛?TTL
+- `embeddings.provider`锛歟mbedding 鎻愪緵鏂癸紙褰撳墠鍐呯疆 `deterministic/mock/builtin`锛?
+- `claude_model_mapping`锛氬瓧鍏镐腑 `fast`/`slow` 鍚庣紑鏄犲皠鍒板搴?DeepSeek 妯″瀷
 
-### 环境变量
+### 鐜鍙橀噺
 
-| 变量 | 用途 | 默认值 |
+| 鍙橀噺 | 鐢ㄩ€?| 榛樿鍊?|
 | --- | --- | --- |
-| `PORT` | 服务端口 | `5001` |
-| `LOG_LEVEL` | 日志级别 | `INFO`（可选：`DEBUG`/`WARN`/`ERROR`） |
-| `DS2API_ADMIN_KEY` | Admin 登录密钥 | `admin` |
-| `DS2API_JWT_SECRET` | Admin JWT 签名密钥 | 等同 `DS2API_ADMIN_KEY` |
-| `DS2API_JWT_EXPIRE_HOURS` | Admin JWT 过期小时数 | `24` |
-| `DS2API_CONFIG_PATH` | 配置文件路径 | `config.json` |
-| `DS2API_CONFIG_JSON` | 直接注入配置（JSON 或 Base64） | — |
-| `DS2API_WASM_PATH` | PoW WASM 文件路径 | 自动查找 |
-| `DS2API_STATIC_ADMIN_DIR` | 管理台静态文件目录 | `static/admin` |
-| `DS2API_AUTO_BUILD_WEBUI` | 启动时自动构建 WebUI | 本地开启，Vercel 关闭 |
-| `DS2API_ACCOUNT_MAX_INFLIGHT` | 每账号最大并发 in-flight 请求数 | `2` |
-| `DS2API_ACCOUNT_CONCURRENCY` | 同上（兼容旧名） | — |
-| `DS2API_ACCOUNT_MAX_QUEUE` | 等待队列上限 | `recommended_concurrency` |
-| `DS2API_ACCOUNT_QUEUE_SIZE` | 同上（兼容旧名） | — |
-| `DS2API_VERCEL_INTERNAL_SECRET` | Vercel 混合流式内部鉴权密钥 | 回退用 `DS2API_ADMIN_KEY` |
-| `DS2API_VERCEL_STREAM_LEASE_TTL_SECONDS` | 流式 lease 过期秒数 | `900` |
-| `VERCEL_TOKEN` | Vercel 同步 token | — |
-| `VERCEL_PROJECT_ID` | Vercel 项目 ID | — |
-| `VERCEL_TEAM_ID` | Vercel 团队 ID | — |
-| `DS2API_VERCEL_PROTECTION_BYPASS` | Vercel 部署保护绕过密钥（内部 Node→Go 调用） | — |
+| `PORT` | 鏈嶅姟绔彛 | `5001` |
+| `LOG_LEVEL` | 鏃ュ織绾у埆 | `INFO`锛堝彲閫夛細`DEBUG`/`WARN`/`ERROR`锛?|
+| `DS2API_ADMIN_KEY` | Admin 鐧诲綍瀵嗛挜 | `admin` |
+| `DS2API_JWT_SECRET` | Admin JWT 绛惧悕瀵嗛挜 | 绛夊悓 `DS2API_ADMIN_KEY` |
+| `DS2API_JWT_EXPIRE_HOURS` | Admin JWT 杩囨湡灏忔椂鏁?| `24` |
+| `DS2API_CONFIG_PATH` | 閰嶇疆鏂囦欢璺緞 | `config.json` |
+| `DS2API_CONFIG_JSON` | 鐩存帴娉ㄥ叆閰嶇疆锛圝SON 鎴?Base64锛?| 鈥?|
+| `DS2API_WASM_PATH` | PoW WASM 鏂囦欢璺緞 | 鑷姩鏌ユ壘 |
+| `DS2API_STATIC_ADMIN_DIR` | 绠＄悊鍙伴潤鎬佹枃浠剁洰褰?| `static/admin` |
+| `DS2API_AUTO_BUILD_WEBUI` | 鍚姩鏃惰嚜鍔ㄦ瀯寤?WebUI | 鏈湴寮€鍚紝Vercel 鍏抽棴 |
+| `DS2API_ACCOUNT_MAX_INFLIGHT` | 姣忚处鍙锋渶澶у苟鍙?in-flight 璇锋眰鏁?| `2` |
+| `DS2API_ACCOUNT_CONCURRENCY` | 鍚屼笂锛堝吋瀹规棫鍚嶏級 | 鈥?|
+| `DS2API_ACCOUNT_MAX_QUEUE` | 绛夊緟闃熷垪涓婇檺 | `recommended_concurrency` |
+| `DS2API_ACCOUNT_QUEUE_SIZE` | 鍚屼笂锛堝吋瀹规棫鍚嶏級 | 鈥?|
+| `DS2API_VERCEL_INTERNAL_SECRET` | Vercel 娣峰悎娴佸紡鍐呴儴閴存潈瀵嗛挜 | 鍥為€€鐢?`DS2API_ADMIN_KEY` |
+| `DS2API_VERCEL_STREAM_LEASE_TTL_SECONDS` | 娴佸紡 lease 杩囨湡绉掓暟 | `900` |
+| `VERCEL_TOKEN` | Vercel 鍚屾 token | 鈥?|
+| `VERCEL_PROJECT_ID` | Vercel 椤圭洰 ID | 鈥?|
+| `VERCEL_TEAM_ID` | Vercel 鍥㈤槦 ID | 鈥?|
+| `DS2API_VERCEL_PROTECTION_BYPASS` | Vercel 閮ㄧ讲淇濇姢缁曡繃瀵嗛挜锛堝唴閮?Node鈫扜o 璋冪敤锛?| 鈥?|
 
-## 鉴权模式
+## 閴存潈妯″紡
 
-调用业务接口（`/v1/*`、`/anthropic/*`）时支持两种模式：
+璋冪敤涓氬姟鎺ュ彛锛坄/v1/*`銆乣/anthropic/*`锛夋椂鏀寔涓ょ妯″紡锛?
 
-| 模式 | 说明 |
+| 妯″紡 | 璇存槑 |
 | --- | --- |
-| **托管账号模式** | `Bearer` 或 `x-api-key` 传入 `config.keys` 中的 key，由服务自动轮询选择账号 |
-| **直通 token 模式** | 传入 token 不在 `config.keys` 中时，直接作为 DeepSeek token 使用 |
+| **鎵樼璐﹀彿妯″紡** | `Bearer` 鎴?`x-api-key` 浼犲叆 `config.keys` 涓殑 key锛岀敱鏈嶅姟鑷姩杞閫夋嫨璐﹀彿 |
+| **鐩撮€?token 妯″紡** | 浼犲叆 token 涓嶅湪 `config.keys` 涓椂锛岀洿鎺ヤ綔涓?DeepSeek token 浣跨敤 |
 
-可选请求头 `X-Ds2-Target-Account`：指定使用某个托管账号（值为 email 或 mobile）。
+鍙€夎姹傚ご `X-Ds2-Target-Account`锛氭寚瀹氫娇鐢ㄦ煇涓墭绠¤处鍙凤紙鍊间负 email 鎴?mobile锛夈€?
 
-## 并发模型
+## 骞跺彂妯″瀷
 
 ```
-每账号可用并发 = DS2API_ACCOUNT_MAX_INFLIGHT（默认 2）
-建议并发值 = 账号数量 × 每账号并发上限
-等待队列上限 = DS2API_ACCOUNT_MAX_QUEUE（默认 = 建议并发值）
-429 阈值 = in-flight + 等待队列 ≈ 账号数量 × 4
+姣忚处鍙峰彲鐢ㄥ苟鍙?= DS2API_ACCOUNT_MAX_INFLIGHT锛堥粯璁?2锛?
+寤鸿骞跺彂鍊?= 璐﹀彿鏁伴噺 脳 姣忚处鍙峰苟鍙戜笂闄?
+绛夊緟闃熷垪涓婇檺 = DS2API_ACCOUNT_MAX_QUEUE锛堥粯璁?= 寤鸿骞跺彂鍊硷級
+429 闃堝€?= in-flight + 绛夊緟闃熷垪 鈮?璐﹀彿鏁伴噺 脳 4
 ```
 
-- 当 in-flight 槽位满时，请求进入等待队列，**不会立即 429**
-- 超出总承载上限后才返回 `429 Too Many Requests`
-- `GET /admin/queue/status` 返回实时并发状态
+- 褰?in-flight 妲戒綅婊℃椂锛岃姹傝繘鍏ョ瓑寰呴槦鍒楋紝**涓嶄細绔嬪嵆 429**
+- 瓒呭嚭鎬绘壙杞戒笂闄愬悗鎵嶈繑鍥?`429 Too Many Requests`
+- `GET /admin/queue/status` 杩斿洖瀹炴椂骞跺彂鐘舵€?
 
-## Tool Call 适配
+## Tool Call 閫傞厤
 
-当请求中带 `tools` 时，DS2API 会做防泄漏处理：
+褰撹姹備腑甯?`tools` 鏃讹紝DS2API 浼氬仛闃叉硠婕忓鐞嗭細
 
-1. 只在**非代码块上下文**启用 toolcall 特征识别（代码块示例不会触发）
-2. 一旦命中高置信特征（`tool_calls` + `name` + `arguments/input` 起始）就立即输出 `delta.tool_calls`
-3. 已确认的 toolcall JSON 片段不会泄漏到 `delta.content`
-4. 前文/后文自然语言保持顺序透传，支持混合文本与增量参数输出
+1. 鍙湪**闈炰唬鐮佸潡涓婁笅鏂?*鍚敤 toolcall 鐗瑰緛璇嗗埆锛堜唬鐮佸潡绀轰緥涓嶄細瑙﹀彂锛?
+2. 涓€鏃﹀懡涓珮缃俊鐗瑰緛锛坄tool_calls` + `name` + `arguments/input` 璧峰锛夊氨绔嬪嵆杈撳嚭 `delta.tool_calls`
+3. 宸茬‘璁ょ殑 toolcall JSON 鐗囨涓嶄細娉勬紡鍒?`delta.content`
+4. 鍓嶆枃/鍚庢枃鑷劧璇█淇濇寔椤哄簭閫忎紶锛屾敮鎸佹贩鍚堟枃鏈笌澧為噺鍙傛暟杈撳嚭
 
-## 项目结构
+## 椤圭洰缁撴瀯
 
 ```text
 ds2api/
-├── cmd/
-│   ├── ds2api/              # 本地 / 容器启动入口
-│   └── ds2api-tests/        # 端到端测试集入口
-├── api/
-│   ├── index.go             # Vercel Serverless Go 入口
-│   ├── chat-stream.js       # Vercel Node.js 流式转发
-│   └── helpers/             # Node.js 辅助模块
-├── internal/
-│   ├── account/             # 账号池与并发队列
-│   ├── adapter/
-│   │   ├── openai/          # OpenAI 兼容适配器（含 Tool Call 解析、Vercel 流式 prepare/release）
-│   │   └── claude/          # Claude 兼容适配器
-│   ├── admin/               # Admin API handlers
-│   ├── auth/                # 鉴权与 JWT
-│   ├── config/              # 配置加载与热更新
-│   ├── deepseek/            # DeepSeek API 客户端、PoW WASM
-│   ├── server/              # HTTP 路由与中间件（chi router）
-│   ├── sse/                 # SSE 解析工具
-│   ├── util/                # 通用工具函数
-│   └── webui/               # WebUI 静态文件托管与自动构建
-├── webui/                   # React WebUI 源码（Vite + Tailwind）
-│   └── src/
-│       ├── components/      # AccountManager / ApiTester / BatchImport / VercelSync / Login / LandingPage
-│       └── locales/         # 中英文语言包（zh.json / en.json）
-├── scripts/
-│   ├── build-webui.sh       # WebUI 手动构建脚本
-│   └── testsuite/           # 测试集运行脚本
-├── static/admin/            # WebUI 构建产物（不提交到 Git）
-├── .github/
-│   ├── workflows/           # GitHub Actions（Release 自动构建）
-│   ├── ISSUE_TEMPLATE/      # Issue 模板
-│   └── PULL_REQUEST_TEMPLATE.md
-├── config.example.json      # 配置文件示例
-├── .env.example             # 环境变量示例
-├── Dockerfile               # 多阶段构建（WebUI + Go）
-├── docker-compose.yml       # 生产环境 Docker Compose
-├── docker-compose.dev.yml   # 开发环境 Docker Compose
-├── vercel.json              # Vercel 路由与构建配置
-├── go.mod / go.sum          # Go 模块依赖
-└── version.txt              # 版本号
+鈹溾攢鈹€ cmd/
+鈹?  鈹溾攢鈹€ ds2api/              # 鏈湴 / 瀹瑰櫒鍚姩鍏ュ彛
+鈹?  鈹斺攢鈹€ ds2api-tests/        # 绔埌绔祴璇曢泦鍏ュ彛
+鈹溾攢鈹€ api/
+鈹?  鈹溾攢鈹€ index.go             # Vercel Serverless Go 鍏ュ彛
+鈹?  鈹溾攢鈹€ chat-stream.js       # Vercel Node.js 娴佸紡杞彂
+鈹?  鈹斺攢鈹€ helpers/             # Node.js 杈呭姪妯″潡
+鈹溾攢鈹€ internal/
+鈹?  鈹溾攢鈹€ account/             # 璐﹀彿姹犱笌骞跺彂闃熷垪
+鈹?  鈹溾攢鈹€ adapter/
+鈹?  鈹?  鈹溾攢鈹€ openai/          # OpenAI 鍏煎閫傞厤鍣紙鍚?Tool Call 瑙ｆ瀽銆乂ercel 娴佸紡 prepare/release锛?
+鈹?  鈹?  鈹斺攢鈹€ claude/          # Claude 鍏煎閫傞厤鍣?
+鈹?  鈹溾攢鈹€ admin/               # Admin API handlers
+鈹?  鈹溾攢鈹€ auth/                # 閴存潈涓?JWT
+鈹?  鈹溾攢鈹€ config/              # 閰嶇疆鍔犺浇涓庣儹鏇存柊
+鈹?  鈹溾攢鈹€ deepseek/            # DeepSeek API 瀹㈡埛绔€丳oW WASM
+鈹?  鈹溾攢鈹€ server/              # HTTP 璺敱涓庝腑闂翠欢锛坈hi router锛?
+鈹?  鈹溾攢鈹€ sse/                 # SSE 瑙ｆ瀽宸ュ叿
+鈹?  鈹溾攢鈹€ util/                # 閫氱敤宸ュ叿鍑芥暟
+鈹?  鈹斺攢鈹€ webui/               # WebUI 闈欐€佹枃浠舵墭绠′笌鑷姩鏋勫缓
+鈹溾攢鈹€ webui/                   # React WebUI 婧愮爜锛圴ite + Tailwind锛?
+鈹?  鈹斺攢鈹€ src/
+鈹?      鈹溾攢鈹€ components/      # AccountManager / ApiTester / BatchImport / VercelSync / Login / LandingPage
+鈹?      鈹斺攢鈹€ locales/         # 涓嫳鏂囪瑷€鍖咃紙zh.json / en.json锛?
+鈹溾攢鈹€ scripts/
+鈹?  鈹溾攢鈹€ build-webui.sh       # WebUI 鎵嬪姩鏋勫缓鑴氭湰
+鈹?  鈹斺攢鈹€ testsuite/           # 娴嬭瘯闆嗚繍琛岃剼鏈?
+鈹溾攢鈹€ static/admin/            # WebUI 鏋勫缓浜х墿锛堜笉鎻愪氦鍒?Git锛?
+鈹溾攢鈹€ .github/
+鈹?  鈹溾攢鈹€ workflows/           # GitHub Actions锛圧elease 鑷姩鏋勫缓锛?
+鈹?  鈹溾攢鈹€ ISSUE_TEMPLATE/      # Issue 妯℃澘
+鈹?  鈹斺攢鈹€ PULL_REQUEST_TEMPLATE.md
+鈹溾攢鈹€ config.example.json      # 閰嶇疆鏂囦欢绀轰緥
+鈹溾攢鈹€ .env.example             # 鐜鍙橀噺绀轰緥
+鈹溾攢鈹€ Dockerfile               # 澶氶樁娈垫瀯寤猴紙WebUI + Go锛?
+鈹溾攢鈹€ docker-compose.yml       # 鐢熶骇鐜 Docker Compose
+鈹溾攢鈹€ docker-compose.dev.yml   # 寮€鍙戠幆澧?Docker Compose
+鈹溾攢鈹€ vercel.json              # Vercel 璺敱涓庢瀯寤洪厤缃?
+鈹溾攢鈹€ go.mod / go.sum          # Go 妯″潡渚濊禆
+鈹斺攢鈹€ version.txt              # 鐗堟湰鍙?
 ```
 
-## 文档索引
+## 鏂囨。绱㈠紩
 
-| 文档 | 说明 |
+| 鏂囨。 | 璇存槑 |
 | --- | --- |
-| [API.md](API.md) / [API.en.md](API.en.md) | API 接口文档（含请求/响应示例） |
-| [DEPLOY.md](DEPLOY.md) / [DEPLOY.en.md](DEPLOY.en.md) | 部署指南（本地/Docker/Vercel/systemd） |
-| [CONTRIBUTING.md](CONTRIBUTING.md) / [CONTRIBUTING.en.md](CONTRIBUTING.en.md) | 贡献指南 |
-| [TESTING.md](TESTING.md) | 测试集使用指南 |
+| [API.md](API.md) / [API.en.md](API.en.md) | API 鎺ュ彛鏂囨。锛堝惈璇锋眰/鍝嶅簲绀轰緥锛?|
+| [DEPLOY.md](DEPLOY.md) / [DEPLOY.en.md](DEPLOY.en.md) | 閮ㄧ讲鎸囧崡锛堟湰鍦?Docker/Vercel/systemd锛?|
+| [CONTRIBUTING.md](CONTRIBUTING.md) / [CONTRIBUTING.en.md](CONTRIBUTING.en.md) | 璐＄尞鎸囧崡 |
+| [TESTING.md](TESTING.md) | 娴嬭瘯闆嗕娇鐢ㄦ寚鍗?|
 
-## 测试
+## 娴嬭瘯
 
 ```bash
-# 单元测试
+# 鍗曞厓娴嬭瘯
 go test ./...
 
-# 一键端到端全链路测试（真实账号，生成完整请求/响应日志）
+# 涓€閿鍒扮鍏ㄩ摼璺祴璇曪紙鐪熷疄璐﹀彿锛岀敓鎴愬畬鏁磋姹?鍝嶅簲鏃ュ織锛?
 ./scripts/testsuite/run-live.sh
 
-# 或自定义参数
+# 鎴栬嚜瀹氫箟鍙傛暟
 go run ./cmd/ds2api-tests \
   --config config.json \
   --admin-key admin \
@@ -394,14 +394,15 @@ go run ./cmd/ds2api-tests \
   --retries 2
 ```
 
-## Release 自动构建（GitHub Actions）
+## Release 鑷姩鏋勫缓锛圙itHub Actions锛?
 
-工作流文件：`.github/workflows/release-artifacts.yml`
+宸ヤ綔娴佹枃浠讹細`.github/workflows/release-artifacts.yml`
 
-- **触发条件**：仅在 GitHub Release `published` 时触发（普通 push 不会触发）
-- **构建产物**：多平台二进制包（`linux/amd64`、`linux/arm64`、`darwin/amd64`、`darwin/arm64`、`windows/amd64`）+ `sha256sums.txt`
-- **每个压缩包包含**：`ds2api` 可执行文件、`static/admin`、WASM 文件、配置示例、README、LICENSE
+- **瑙﹀彂鏉′欢**锛氫粎鍦?GitHub Release `published` 鏃惰Е鍙戯紙鏅€?push 涓嶄細瑙﹀彂锛?
+- **鏋勫缓浜х墿**锛氬骞冲彴浜岃繘鍒跺寘锛坄linux/amd64`銆乣linux/arm64`銆乣darwin/amd64`銆乣darwin/arm64`銆乣windows/amd64`锛? `sha256sums.txt`
+- **姣忎釜鍘嬬缉鍖呭寘鍚?*锛歚ds2api` 鍙墽琛屾枃浠躲€乣static/admin`銆乄ASM 鏂囦欢銆侀厤缃ず渚嬨€丷EADME銆丩ICENSE
 
-## 免责声明
+## 鍏嶈矗澹版槑
 
-本项目基于逆向方式实现，仅供学习与研究使用。稳定性和可用性不作保证，请勿用于违反服务条款或法律法规的场景。
+鏈」鐩熀浜庨€嗗悜鏂瑰紡瀹炵幇锛屼粎渚涘涔犱笌鐮旂┒浣跨敤銆傜ǔ瀹氭€у拰鍙敤鎬т笉浣滀繚璇侊紝璇峰嬁鐢ㄤ簬杩濆弽鏈嶅姟鏉℃鎴栨硶寰嬫硶瑙勭殑鍦烘櫙銆?
+

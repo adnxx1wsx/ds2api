@@ -1,12 +1,12 @@
-# DS2API
+﻿# DS2API
 
 [![License](https://img.shields.io/github/license/CJackHwang/ds2api.svg)](LICENSE)
 ![Stars](https://img.shields.io/github/stars/CJackHwang/ds2api.svg)
 ![Forks](https://img.shields.io/github/forks/CJackHwang/ds2api.svg)
-[![Version](https://img.shields.io/badge/version-1.6.11-blue.svg)](version.txt)
+[![Version](https://img.shields.io/badge/version-1.6.12-blue.svg)](version.txt)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](DEPLOY.en.md)
 
-Language: [中文](README.MD) | [English](README.en.md)
+Language: [涓枃](README.MD) | [English](README.en.md)
 
 DS2API converts DeepSeek Web chat capability into OpenAI-compatible and Claude-compatible APIs. The backend is a **pure Go implementation**, with a React WebUI admin panel (source in `webui/`, build output auto-generated to `static/admin` during deployment).
 
@@ -14,12 +14,12 @@ DS2API converts DeepSeek Web chat capability into OpenAI-compatible and Claude-c
 
 ```mermaid
 flowchart LR
-    Client["🖥️ Clients\n(OpenAI / Claude compat)"]
+    Client["馃枼锔?Clients\n(OpenAI / Claude compat)"]
 
     subgraph DS2API["DS2API Service"]
         direction TB
         CORS["CORS Middleware"]
-        Auth["🔐 Auth Middleware"]
+        Auth["馃攼 Auth Middleware"]
 
         subgraph Adapters["Adapter Layer"]
             OA["OpenAI Adapter\n/v1/*"]
@@ -27,15 +27,15 @@ flowchart LR
         end
 
         subgraph Support["Support Modules"]
-            Pool["📦 Account Pool / Queue"]
-            PoW["⚙️ PoW WASM\n(wazero)"]
+            Pool["馃摝 Account Pool / Queue"]
+            PoW["鈿欙笍 PoW WASM\n(wazero)"]
         end
 
-        Admin["🛠️ Admin API\n/admin/*"]
-        WebUI["🌐 WebUI\n(/admin)"]
+        Admin["馃洜锔?Admin API\n/admin/*"]
+        WebUI["馃寪 WebUI\n(/admin)"]
     end
 
-    DS["☁️ DeepSeek API"]
+    DS["鈽侊笍 DeepSeek API"]
 
     Client -- "Request" --> CORS --> Auth
     Auth --> OA & CA
@@ -68,11 +68,11 @@ flowchart LR
 
 | Tier | Platform | Status |
 | --- | --- | --- |
-| P0 | Codex CLI/SDK (`wire_api=chat` / `wire_api=responses`) | ✅ |
-| P0 | OpenAI SDK (JS/Python, chat + responses) | ✅ |
-| P0 | Vercel AI SDK (openai-compatible) | ✅ |
-| P0 | Anthropic SDK (messages) | ✅ |
-| P1 | LangChain / LlamaIndex / OpenWebUI (OpenAI-compatible integration) | ✅ |
+| P0 | Codex CLI/SDK (`wire_api=chat` / `wire_api=responses`) | 鉁?|
+| P0 | OpenAI SDK (JS/Python, chat + responses) | 鉁?|
+| P0 | Vercel AI SDK (openai-compatible) | 鉁?|
+| P0 | Anthropic SDK (messages) | 鉁?|
+| P1 | LangChain / LlamaIndex / OpenWebUI (OpenAI-compatible integration) | 鉁?|
 | P2 | MCP standalone bridge | Planned |
 
 ## Model Support
@@ -81,10 +81,10 @@ flowchart LR
 
 | Model | thinking | search |
 | --- | --- | --- |
-| `deepseek-chat` | ❌ | ❌ |
-| `deepseek-reasoner` | ✅ | ❌ |
-| `deepseek-chat-search` | ❌ | ✅ |
-| `deepseek-reasoner-search` | ✅ | ✅ |
+| `deepseek-chat` | 鉂?| 鉂?|
+| `deepseek-reasoner` | 鉁?| 鉂?|
+| `deepseek-chat-search` | 鉂?| 鉁?|
+| `deepseek-reasoner-search` | 鉁?| 鉁?|
 
 ### Claude Endpoint
 
@@ -273,20 +273,20 @@ cp opencode.json.example opencode.json
 | `DS2API_JWT_SECRET` | Admin JWT signing secret | Same as `DS2API_ADMIN_KEY` |
 | `DS2API_JWT_EXPIRE_HOURS` | Admin JWT TTL in hours | `24` |
 | `DS2API_CONFIG_PATH` | Config file path | `config.json` |
-| `DS2API_CONFIG_JSON` | Inline config (JSON or Base64) | — |
+| `DS2API_CONFIG_JSON` | Inline config (JSON or Base64) | 鈥?|
 | `DS2API_WASM_PATH` | PoW WASM file path | Auto-detect |
 | `DS2API_STATIC_ADMIN_DIR` | Admin static assets dir | `static/admin` |
 | `DS2API_AUTO_BUILD_WEBUI` | Auto-build WebUI on startup | Enabled locally, disabled on Vercel |
 | `DS2API_ACCOUNT_MAX_INFLIGHT` | Max in-flight requests per account | `2` |
-| `DS2API_ACCOUNT_CONCURRENCY` | Alias (legacy compat) | — |
+| `DS2API_ACCOUNT_CONCURRENCY` | Alias (legacy compat) | 鈥?|
 | `DS2API_ACCOUNT_MAX_QUEUE` | Waiting queue limit | `recommended_concurrency` |
-| `DS2API_ACCOUNT_QUEUE_SIZE` | Alias (legacy compat) | — |
+| `DS2API_ACCOUNT_QUEUE_SIZE` | Alias (legacy compat) | 鈥?|
 | `DS2API_VERCEL_INTERNAL_SECRET` | Vercel hybrid streaming internal auth | Falls back to `DS2API_ADMIN_KEY` |
 | `DS2API_VERCEL_STREAM_LEASE_TTL_SECONDS` | Stream lease TTL seconds | `900` |
-| `VERCEL_TOKEN` | Vercel sync token | — |
-| `VERCEL_PROJECT_ID` | Vercel project ID | — |
-| `VERCEL_TEAM_ID` | Vercel team ID | — |
-| `DS2API_VERCEL_PROTECTION_BYPASS` | Vercel deployment protection bypass for internal Node→Go calls | — |
+| `VERCEL_TOKEN` | Vercel sync token | 鈥?|
+| `VERCEL_PROJECT_ID` | Vercel project ID | 鈥?|
+| `VERCEL_TEAM_ID` | Vercel team ID | 鈥?|
+| `DS2API_VERCEL_PROTECTION_BYPASS` | Vercel deployment protection bypass for internal Node鈫扜o calls | 鈥?|
 
 ## Authentication Modes
 
@@ -303,12 +303,12 @@ Optional header `X-Ds2-Target-Account`: Pin a specific managed account (value is
 
 ```
 Per-account inflight = DS2API_ACCOUNT_MAX_INFLIGHT (default 2)
-Recommended concurrency = account_count × per_account_inflight
+Recommended concurrency = account_count 脳 per_account_inflight
 Queue limit = DS2API_ACCOUNT_MAX_QUEUE (default = recommended concurrency)
-429 threshold = inflight + queue ≈ account_count × 4
+429 threshold = inflight + queue 鈮?account_count 脳 4
 ```
 
-- When inflight slots are full, requests enter a waiting queue — **no immediate 429**
+- When inflight slots are full, requests enter a waiting queue 鈥?**no immediate 429**
 - 429 is returned only when total load exceeds inflight + queue capacity
 - `GET /admin/queue/status` returns real-time concurrency state
 
@@ -325,46 +325,46 @@ When `tools` is present in the request, DS2API performs anti-leak handling:
 
 ```text
 ds2api/
-├── cmd/
-│   ├── ds2api/              # Local / container entrypoint
-│   └── ds2api-tests/        # End-to-end testsuite entrypoint
-├── api/
-│   ├── index.go             # Vercel Serverless Go entry
-│   ├── chat-stream.js       # Vercel Node.js stream relay
-│   └── helpers/             # Node.js helper modules
-├── internal/
-│   ├── account/             # Account pool and concurrency queue
-│   ├── adapter/
-│   │   ├── openai/          # OpenAI adapter (incl. tool call parsing, Vercel stream prepare/release)
-│   │   └── claude/          # Claude adapter
-│   ├── admin/               # Admin API handlers
-│   ├── auth/                # Auth and JWT
-│   ├── config/              # Config loading and hot-reload
-│   ├── deepseek/            # DeepSeek API client, PoW WASM
-│   ├── server/              # HTTP routing and middleware (chi router)
-│   ├── sse/                 # SSE parsing utilities
-│   ├── util/                # Common utilities
-│   └── webui/               # WebUI static file serving and auto-build
-├── webui/                   # React WebUI source (Vite + Tailwind)
-│   └── src/
-│       ├── components/      # AccountManager / ApiTester / BatchImport / VercelSync / Login / LandingPage
-│       └── locales/         # Language packs (zh.json / en.json)
-├── scripts/
-│   ├── build-webui.sh       # Manual WebUI build script
-│   └── testsuite/           # Testsuite runner scripts
-├── static/admin/            # WebUI build output (not committed to Git)
-├── .github/
-│   ├── workflows/           # GitHub Actions (Release artifact automation)
-│   ├── ISSUE_TEMPLATE/      # Issue templates
-│   └── PULL_REQUEST_TEMPLATE.md
-├── config.example.json      # Config file template
-├── .env.example             # Environment variable template
-├── Dockerfile               # Multi-stage build (WebUI + Go)
-├── docker-compose.yml       # Production Docker Compose
-├── docker-compose.dev.yml   # Development Docker Compose
-├── vercel.json              # Vercel routing and build config
-├── go.mod / go.sum          # Go module dependencies
-└── version.txt              # Version number
+鈹溾攢鈹€ cmd/
+鈹?  鈹溾攢鈹€ ds2api/              # Local / container entrypoint
+鈹?  鈹斺攢鈹€ ds2api-tests/        # End-to-end testsuite entrypoint
+鈹溾攢鈹€ api/
+鈹?  鈹溾攢鈹€ index.go             # Vercel Serverless Go entry
+鈹?  鈹溾攢鈹€ chat-stream.js       # Vercel Node.js stream relay
+鈹?  鈹斺攢鈹€ helpers/             # Node.js helper modules
+鈹溾攢鈹€ internal/
+鈹?  鈹溾攢鈹€ account/             # Account pool and concurrency queue
+鈹?  鈹溾攢鈹€ adapter/
+鈹?  鈹?  鈹溾攢鈹€ openai/          # OpenAI adapter (incl. tool call parsing, Vercel stream prepare/release)
+鈹?  鈹?  鈹斺攢鈹€ claude/          # Claude adapter
+鈹?  鈹溾攢鈹€ admin/               # Admin API handlers
+鈹?  鈹溾攢鈹€ auth/                # Auth and JWT
+鈹?  鈹溾攢鈹€ config/              # Config loading and hot-reload
+鈹?  鈹溾攢鈹€ deepseek/            # DeepSeek API client, PoW WASM
+鈹?  鈹溾攢鈹€ server/              # HTTP routing and middleware (chi router)
+鈹?  鈹溾攢鈹€ sse/                 # SSE parsing utilities
+鈹?  鈹溾攢鈹€ util/                # Common utilities
+鈹?  鈹斺攢鈹€ webui/               # WebUI static file serving and auto-build
+鈹溾攢鈹€ webui/                   # React WebUI source (Vite + Tailwind)
+鈹?  鈹斺攢鈹€ src/
+鈹?      鈹溾攢鈹€ components/      # AccountManager / ApiTester / BatchImport / VercelSync / Login / LandingPage
+鈹?      鈹斺攢鈹€ locales/         # Language packs (zh.json / en.json)
+鈹溾攢鈹€ scripts/
+鈹?  鈹溾攢鈹€ build-webui.sh       # Manual WebUI build script
+鈹?  鈹斺攢鈹€ testsuite/           # Testsuite runner scripts
+鈹溾攢鈹€ static/admin/            # WebUI build output (not committed to Git)
+鈹溾攢鈹€ .github/
+鈹?  鈹溾攢鈹€ workflows/           # GitHub Actions (Release artifact automation)
+鈹?  鈹溾攢鈹€ ISSUE_TEMPLATE/      # Issue templates
+鈹?  鈹斺攢鈹€ PULL_REQUEST_TEMPLATE.md
+鈹溾攢鈹€ config.example.json      # Config file template
+鈹溾攢鈹€ .env.example             # Environment variable template
+鈹溾攢鈹€ Dockerfile               # Multi-stage build (WebUI + Go)
+鈹溾攢鈹€ docker-compose.yml       # Production Docker Compose
+鈹溾攢鈹€ docker-compose.dev.yml   # Development Docker Compose
+鈹溾攢鈹€ vercel.json              # Vercel routing and build config
+鈹溾攢鈹€ go.mod / go.sum          # Go module dependencies
+鈹斺攢鈹€ version.txt              # Version number
 ```
 
 ## Documentation Index
@@ -405,3 +405,4 @@ Workflow: `.github/workflows/release-artifacts.yml`
 ## Disclaimer
 
 This project is built through reverse engineering and is provided for learning and research only. Stability is not guaranteed. Do not use it in scenarios that violate terms of service or laws.
+

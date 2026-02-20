@@ -119,3 +119,52 @@ func TestNormalizeOpenAIMessagesForPrompt_FunctionRoleCompatible(t *testing.T) {
 		t.Fatalf("unexpected normalized function-role content: %q", got)
 	}
 }
+
+func TestNormalizeOpenAIMessagesForPrompt_ToolOutputFallback(t *testing.T) {
+	raw := []any{
+		map[string]any{
+			"role":         "tool",
+			"tool_call_id": "call_5",
+			"name":         "search",
+			"output": map[string]any{
+				"items": []any{"A", "B"},
+			},
+		},
+	}
+
+	normalized := normalizeOpenAIMessagesForPrompt(raw)
+	if len(normalized) != 1 {
+		t.Fatalf("expected one normalized message, got %d", len(normalized))
+	}
+	got, _ := normalized[0]["content"].(string)
+	if !strings.Contains(got, `"items":["A","B"]`) {
+		t.Fatalf("expected tool output fallback preserved, got %q", got)
+	}
+}
+
+func TestNormalizeOpenAIMessagesForPrompt_ToolResultContentObjectBlock(t *testing.T) {
+	raw := []any{
+		map[string]any{
+			"role":         "tool",
+			"tool_call_id": "call_6",
+			"name":         "search",
+			"content": []any{
+				map[string]any{
+					"type": "tool_result",
+					"content": map[string]any{
+						"answer": "ok",
+					},
+				},
+			},
+		},
+	}
+
+	normalized := normalizeOpenAIMessagesForPrompt(raw)
+	if len(normalized) != 1 {
+		t.Fatalf("expected one normalized message, got %d", len(normalized))
+	}
+	got, _ := normalized[0]["content"].(string)
+	if !strings.Contains(got, `"answer":"ok"`) {
+		t.Fatalf("expected tool_result object block preserved, got %q", got)
+	}
+}

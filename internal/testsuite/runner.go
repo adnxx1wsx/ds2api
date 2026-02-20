@@ -1036,7 +1036,7 @@ func (r *Runner) caseResponsesStream(ctx context.Context, cc *caseContext) error
 }
 
 func (r *Runner) caseEmbeddings(ctx context.Context, cc *caseContext) error {
-	resp, err := cc.request(ctx, requestSpec{
+	resp, err := cc.requestOnce(ctx, requestSpec{
 		Method: http.MethodPost,
 		Path:   "/v1/embeddings",
 		Headers: map[string]string{
@@ -1046,8 +1046,8 @@ func (r *Runner) caseEmbeddings(ctx context.Context, cc *caseContext) error {
 			"model": "gpt-4o",
 			"input": []string{"hello", "world"},
 		},
-		Retryable: true,
-	})
+		Retryable: false,
+	}, 1)
 	if err != nil {
 		return err
 	}

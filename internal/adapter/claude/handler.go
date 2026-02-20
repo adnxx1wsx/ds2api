@@ -182,7 +182,10 @@ func (h *Handler) handleClaudeStreamRealtime(w http.ResponseWriter, r *http.Requ
 		searchEnabled,
 		toolNames,
 	)
-	streamRuntime.sendMessageStart()
+	// If downstream is already closed, runtime marks itself non-writable.
+	// We still enter ConsumeSSE so upstream body is canceled via request context
+	// and account slots are released deterministically.
+	_ = streamRuntime.sendMessageStart()
 
 	initialType := "text"
 	if thinkingEnabled {
@@ -197,8 +200,8 @@ func (h *Handler) handleClaudeStreamRealtime(w http.ResponseWriter, r *http.Requ
 		IdleTimeout:         claudeStreamIdleTimeout,
 		MaxKeepAliveNoInput: claudeStreamMaxKeepaliveCnt,
 	}, streamengine.ConsumeHooks{
-		OnKeepAlive: func() {
-			streamRuntime.sendPing()
+		OnKeepAlive: func() bool {
+			return streamRuntime.sendPing()
 		},
 		OnParsed:   streamRuntime.onParsed,
 		OnFinalize: streamRuntime.onFinalize,
